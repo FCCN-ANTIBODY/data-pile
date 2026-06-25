@@ -45,14 +45,14 @@ else
   sig="$(jq -r '.head.sig // empty' "$manifest")"
   [ -n "$sig" ] || dp_die "manifest head carries no signature"
   tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
-  printf '%s' "$sig" > "$tmp/sig"
+  printf '%s' "$sig" | base64 -d > "$tmp/sig"
   printf '%s' "$digest" | ssh-keygen -Y verify -n data-pile -I "$source" \
     -f "$signers" -s "$tmp/sig" >/dev/null \
     || dp_die "signature does NOT verify against $signers"
   # Cross-check the signer fingerprint matches what pile.yml registered.
   want="$(dp_source_signer "$source" "$repo/pile.yml")"
   if [ -n "$want" ]; then
-    got="$(awk '{print $3" "$4}' "$signers" | ssh-keygen -lf - 2>/dev/null | awk '{print $2}')"
+    got="$(awk '{print $2,$3,$4}' "$signers" | ssh-keygen -lf - 2>/dev/null | awk '{print $2}')"
     [ "$got" = "$want" ] || dp_die "signer fingerprint $got != registered $want"
   fi
   dp_log "OK: signature verifies (signer $source)"

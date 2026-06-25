@@ -30,7 +30,7 @@ test/make-fixtures.sh "$work/pile" "$recip" 3 "$signkey" >/dev/null
 ok "chain built"
 
 echo "[2] verify passes on a good chain"
-vfy "$work/pile" >/dev/null || fail "verify rejected a valid chain"
+vfy "$work/pile" >"$work/v.out" 2>&1 || { cat "$work/v.out"; fail "verify rejected a valid chain"; }
 ok "valid chain verifies"
 
 echo "[3] verify fails on a tampered block"

@@ -40,8 +40,10 @@ tmp="$(mktemp)"; printf '%s' "$entries" | jq -cS '.' > "$tmp"
 digest="$(cat "$tmp" | tr -d '\n' | sha256sum | cut -d' ' -f1)"
 sig="null"
 if [ -n "$signkey" ] && command -v ssh-keygen >/dev/null 2>&1; then
-  s="$(printf '%s' "$digest" | ssh-keygen -Y sign -n data-pile -f "$signkey" 2>/dev/null)"
-  sig="$(printf '%s' "$s" | jq -Rs '.')"
+  # Sign the digest; store the armored signature base64-encoded so JSON round-trips
+  # it byte-for-byte (SSH signatures are newline-sensitive).
+  printf '%s' "$digest" | ssh-keygen -Y sign -n data-pile -f "$signkey" 2>/dev/null > "$tmp.sig"
+  sig="$(base64 -w0 < "$tmp.sig" | jq -R '.')"
 fi
 jq -n --argjson entries "$entries" --argjson seq "$((nblocks-1))" \
       --arg src "$src" --arg dg "$digest" --argjson sig "$sig" '
