@@ -1,19 +1,20 @@
 name: handshake
 
 # Owner-initiated registration with Atlas. Opens a PR on atlas.anecdote.channel adding
-# this pile's entry to _data/piles.yml — the consent signal. When Atlas accepts, it
-# installs its delivery channel (a GitHub App scoped to this repo's feed/** + Issues) and
-# opens a provisioning Issue back here.
+# this pile's entry to _data/piles.yml — the consent signal. The entry tells Atlas the
+# pile's age_recipient (so it can wrap each digest's ratchet seed for the owner) and the
+# feed branch it will publish to. When Atlas accepts, it begins publishing the encrypted
+# feed at /piles/<id>/feed/* on its OWN domain; this pile PULLS it via ingest.yml.
+#
+# There is NO GitHub App and NO write grant to Atlas. Trust runs the other way: the pile
+# pins Atlas's published delivery-signer fingerprint (atlas.anecdote.channel/keys/atlas.fpr)
+# into pile.yml `signer` + keys/atlas.signers, BY HAND, confirmed out-of-band / IRL.
 #
 # Cross-repo: needs a fine-grained PAT (ATLAS_PR_TOKEN) with Contents+PR write on
 # FCCN-ANTIBODY/atlas.anecdote.channel. Without it, the job prints the entry to paste by hand.
 
 on:
   workflow_dispatch:
-    inputs:
-      signer:
-        description: "Atlas-side signer fingerprint to register (SHA256:...)"
-        required: true
 
 permissions:
   contents: read
@@ -36,8 +37,7 @@ jobs:
           {
             echo "- id: ${id}"
             echo "  scope: ${scope}"
-            echo "  feed: feed/atlas"
-            echo "  signer: \"${{ inputs.signer }}\""
+            echo "  feed: feed/${scope}/${id}"
             echo "  age_recipient: \"${recip}\""
             echo "  repo_url: https://github.com/${GITHUB_REPOSITORY}"
           } | tee entry.yml
@@ -62,5 +62,5 @@ jobs:
           git commit -m "register pile ${GITHUB_REPOSITORY}"
           git push -u origin "$br"
           gh pr create --title "Register pile ${GITHUB_REPOSITORY}" \
-            --body "Handshake: requesting aggregation. Inbound digests will be delivered to feed/atlas in this pile." \
+            --body "Handshake: requesting aggregation. Atlas will publish this pile's encrypted feed at /piles/<id>/feed/*; the pile pulls + verifies it. No write access to this repo is requested." \
             --base main --head "$br"

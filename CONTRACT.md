@@ -60,16 +60,17 @@ discloses blocks `seq ≥ n` and **never** the blocks before it.
 The manifest is `{ "version", "source", "entries": [ … ], "head": { "seq", "digest", "sig" } }`,
 where `digest = sha256(canonical_json(entries))` and `sig` is a signature over that digest.
 
-- The manifest **head is signed** by Atlas's delivery key, reusing the SSH/commit-signing trust
-  anchor the Atlas `signer` fingerprint already establishes (the same fingerprint the pile
-  registered with Atlas at handshake). `bin/verify` recomputes `digest` and checks `sig` against the
-  registered signer (`keys/<source>.signers`, an SSH allowed-signers file whose fingerprint must
-  equal `pile.yml`'s `signer`). The signed head is the single "header" from which a verifier walks
-  and validates the entire chain.
+- The manifest **head is signed** by Atlas's delivery key — an ordinary SSH signing key
+  (`ssh-keygen -Y sign`), not a GitHub App. `bin/verify` recomputes `digest` and checks `sig`
+  against the registered signer (`keys/<source>.signers`, an SSH allowed-signers file whose
+  fingerprint must equal `pile.yml`'s `signer`). The pile pins that key by hand from Atlas's
+  published `keys/atlas.fpr`, confirmed out-of-band / IRL (see the handshake). The signed head is the
+  single "header" from which a verifier walks and validates the entire chain — and it is the **sole**
+  integrity anchor: it travels with the data, so it holds no matter how the bytes were transported.
 - Dropping or altering any past block changes `digest` (and breaks `prev_hash` continuity), failing
   verification.
-- Each delivery is **also a signed git commit** on the source's feed branch, so the branch history
-  is a second, redundant signed audit log.
+- When the pile persists a pulled delivery, its own `bin/ingest` commit onto the source's local feed
+  branch is the local, owner-held audit log of what verified and when.
 
 ### Layer 3 — disclosure (the same ratchet)
 
@@ -85,19 +86,24 @@ The ratchet that encrypts blocks also governs disclosure. The manifest stores on
 - The owner never has to reveal `PILE_AGE_IDENTITY` — which would also expose all future
   deliveries — to prove the past. The ratchet gives forward-only disclosure.
 
-## The feed branch protocol
+## The feed protocol (pull, not push)
 
-- **One branch per source**, prefixed `feed/<source>` (e.g. `feed/atlas`). Multiple Atlas
-  instances or other producers each own a distinct branch, so the pile always knows which channel
-  added which blocks. `bin/ingest` folds blocks in tagged by source.
-- Per digest, Atlas:
-  1. appends `inbox/<seq>.enc` (the block, symmetric-encrypted under `K_seq`; at genesis also
-     `inbox/seed.age`, the `age`-wrapped ratchet seed for the owner),
-  2. updates and re-signs `inbox/manifest.json`,
-  3. commits with a **signed** commit, pushes to `feed/<source>`,
-  4. opens or appends a notify **Issue** (`digest seq N delivered`).
-- `main` carries only the template, `pile.yml`, `keys/pile.age.pub`, and any reports the owner
-  chooses to publish — **never the encrypted log**. The log lives on `feed/**`. This keeps `main`
+Atlas **never reaches into this repo** — the exact mirror of the outbound rule, where a pile places
+onto Atlas and Atlas never pulls. Here Atlas *publishes* and the pile *pulls*:
+
+- **Atlas side.** Atlas produces each pile's chain on a `feed/<scope>/<id>` branch in its **own**
+  repo (parallel to the outbound `pile/<scope>/<id>`) and serves it on its own domain at
+  `/piles/<id>/feed/*` via the gateway Worker. Per digest Atlas appends `inbox/<seq>.enc`
+  (symmetric-encrypted under `K_seq`; at genesis also `inbox/seed.age`, the `age`-wrapped ratchet
+  seed for the owner), updates and **re-signs** `inbox/manifest.json`. The encrypted payload is safe
+  to serve openly.
+- **Pile side.** `bin/ingest` (hourly, no credential) pulls `manifest.json` + every block + `seed.age`
+  from the source's gateway `url`, runs `bin/verify`, and only on success commits the blocks into the
+  pile's **own** `feed/<source>` branch (e.g. `feed/atlas`) — the durable, owner-held tank — and folds
+  the manifest into `state/`. **One source per branch**, so the pile always knows which channel added
+  which blocks.
+- `main` carries only the template, `pile.yml`, `keys/` (public), and any reports the owner chooses
+  to publish — **never the encrypted log**. The log lives on the pile's `feed/**`. This keeps `main`
   clean and any site build narrow (mirrors Atlas's "a placement never triggers a rebuild").
 - **History bounding** reuses Atlas's `prune-pile-history.yml` approach: archive the intact signed
   chain to `archive/feed/<source>@<stamp>`, reset the live ref lean, never rewrite signed commits.
@@ -107,14 +113,16 @@ The ratchet that encrypts blocks also governs disclosure. The manifest stores on
 1. **Deploy.** Fork the template (public). `setup.yml` generates the `age` keypair, commits
    `keys/pile.age.pub`, stores `PILE_AGE_IDENTITY` as a repo secret, and fills `pile.yml`.
 2. **Owner → PR on Atlas.** `handshake.yml` opens a registration PR adding the pile's entry to
-   `atlas.anecdote.channel/_data/piles.yml` (id, scope, the `feed/atlas` expectation, the `signer`
-   fingerprint, the age recipient fingerprint, the repo URL). This PR is the consent signal.
-3. **Atlas reciprocates.** When Atlas accepts the registration it opens an Issue on the pile —
-   *"you weren't aggregated yet → now provisioning"* — establishing the channel.
-4. **Privileged write.** Atlas needs write to the pile's `feed/**` and Issues, including on private
-   piles. This is granted at handshake by installing the **Atlas GitHub App** (per-repo, revocable,
-   scoped to `feed/**` + issues). Atlas does not get `main`.
-5. **Delivery begins.** Atlas pushes encrypted digests to `feed/atlas` and notifies via Issues.
+   `atlas.anecdote.channel/_data/piles.yml` (id, scope, the `feed/<scope>/<id>` branch, the pile's
+   `age_recipient`, the repo URL). This PR is the consent signal — and all it grants Atlas is *where
+   to wrap digests for* this pile. It does **not** grant Atlas any write access.
+3. **Pin Atlas's signer (by hand).** Copy Atlas's published `keys/atlas.signers` into this pile's
+   `keys/atlas.signers` and its `keys/atlas.fpr` value into `pile.yml` `signer`. **Confirm the
+   fingerprint out-of-band / IRL** — a local vouching for the key a local will trust. This is the
+   whole trust handoff; there is no app to install and no token to issue.
+4. **Atlas publishes; the pile pulls.** Once registered, Atlas produces the encrypted feed on its own
+   `feed/<scope>/<id>` branch and serves it at `/piles/<id>/feed/*`. This pile's `ingest.yml` pulls,
+   verifies, and persists into its own feed branch. Atlas never touches this repo.
 
 ## What the pile requires of Atlas
 
@@ -124,10 +132,12 @@ concern.
 - Each block MUST be `age`-encrypted to the pile's committed recipient.
 - Each block MUST be hashed into the signed `manifest.json` chain and carry a `ratchet_pub`
   commitment.
-- Each delivery MUST arrive as a signed git commit on `feed/<source>` plus a notify Issue.
-- The signing key MUST match the `signer` fingerprint the pile registered with Atlas.
+- The manifest head MUST be signed by a key matching the Atlas `signer` fingerprint the pile pinned.
+- The feed MUST be reachable at the gateway `url` the pile registered.
 
-`bin/verify` rejects anything that violates the above; failures are surfaced on the notify Issue.
+Because the **signed manifest** is the integrity anchor, the transport is untrusted: it does not
+matter that the bytes arrived over a plain public fetch. `bin/verify` rejects anything that violates
+the above and fails closed; a failed `ingest.yml` run is the alarm.
 
 ## Producer-side checklist (lives in the pile repo)
 

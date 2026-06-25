@@ -2,6 +2,10 @@
 # Never authoritative; the feed/** branches are. Keep it out of main.
 /state/
 
+# Staging area where bin/ingest places pulled+verified blocks for ingest.yml to
+# commit into the source's own feed branch. Transient; never on main.
+/.ingest/
+
 # Secrets must never be committed. The age private identity lives in the repo secret
 # PILE_AGE_IDENTITY. These patterns are a backstop against accidents.
 *.age.key

@@ -15,9 +15,10 @@ me. If a thing is not written here, I have not reserved the right to do it.
 
 ## What I attest I will do
 
-- I accept deliveries only on my `feed/**` branches, only when they verify: an unbroken hash chain,
-  a signature from the signer I registered, and ratchet commitments that hold. I reject the rest and
-  say so on the notify Issue.
+- I pull deliveries from the producer's own surface and persist them onto my `feed/**` branches only
+  when they verify: an unbroken hash chain, a signature from the signer I registered, and ratchet
+  commitments that hold. I reject the rest and say so in the failed ingest run. No producer is ever
+  granted write into me.
 - I keep my owner's private identity out of my history. I commit only the recipient public key,
   which can encrypt but never decrypt.
 - I do not publish what I hold unless my owner decides to. When they do, they prove it — by

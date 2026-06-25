@@ -1,13 +1,14 @@
 name: ingest
 
-# Scheduled audit: fetch every feed/<source> branch and verify it. A failed verification
-# is the alarm — it means a delivery did not match the registered signer or the chain was
-# broken. Verification needs no secrets; decryption is the owner's explicit, separate step.
+# Scheduled PULL: fetch each source's encrypted feed from the Atlas gateway URL,
+# verify it (signature against the registered Atlas signer + hash-linked chain),
+# and persist the verified blocks into this pile's OWN feed branch — the durable,
+# owner-held tank. A failed verification is the alarm: a delivery did not match the
+# registered signer or the chain was broken. The fetch needs no credential (the
+# payload is encrypted); decryption stays the owner's separate, explicit step.
 #
-# State persistence is intentionally left to the owner: this job surfaces results in the run
-# summary and as an artifact rather than committing into `main` (main is the clean public
-# face — the authoritative log lives on feed/**). Uncomment the commit step if you want a
-# durable state/ on a dedicated branch.
+# Atlas never writes here. `contents: write` is only so the pile can commit what it
+# pulled into its own branch.
 
 on:
   schedule:
@@ -15,7 +16,11 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
+
+concurrency:
+  group: ingest
+  cancel-in-progress: false
 
 jobs:
   ingest:
@@ -26,8 +31,32 @@ jobs:
           fetch-depth: 0
       - name: Install age
         run: sudo apt-get update && sudo apt-get install -y age
-      - name: Verify and fold feeds into state/
+      - name: Pull, verify, and stage feeds
         run: bin/ingest
+      - name: Persist verified blocks into each source's own branch
+        run: |
+          set -euo pipefail
+          git config user.name  "data-pile-ingest"
+          git config user.email "data-pile-ingest@users.noreply.github.com"
+          shopt -s nullglob
+          for d in .ingest/*/; do
+            source="$(basename "$d")"
+            [ -d "$d/inbox" ] || continue
+            branch="$(awk -v s="$source" '$1=="-"&&$2=="name:"{c=$3} c==s&&$1=="branch:"{print $2;exit}' pile.yml)"
+            [ -n "$branch" ] || { echo "no branch for $source"; continue; }
+            work="$(mktemp -d)"; cp -r "$d/inbox" "$work/inbox"
+            parent=""
+            if git rev-parse -q --verify "origin/$branch" >/dev/null; then parent="-p origin/$branch"; fi
+            idx="$(mktemp)"; export GIT_INDEX_FILE="$idx"
+            git read-tree --empty
+            git --work-tree="$work" add -A inbox
+            tree="$(git write-tree)"
+            n="$(jq -r '.head.seq' "$work/inbox/manifest.json")"
+            commit="$(git commit-tree "$tree" $parent -m "ingest: $source verified through seq $n")"
+            git push origin "$commit:refs/heads/$branch"
+            unset GIT_INDEX_FILE
+            echo "persisted $source -> $branch (seq $n)"
+          done
       - name: Surface verified state
         if: always()
         run: |

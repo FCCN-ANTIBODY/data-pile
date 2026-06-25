@@ -50,3 +50,10 @@ dp_source_signer() { # SOURCE_NAME PILE_YML
     cur==s && $1=="signer:" { gsub(/"/,"",$2); print $2; exit }
   ' "$2"
 }
+# The Atlas gateway base URL this pile PULLS the source's encrypted feed from.
+dp_source_url() { # SOURCE_NAME PILE_YML
+  awk -v s="$1" '
+    $1=="-" && $2=="name:" { cur=$3 }
+    cur==s && $1=="url:" { gsub(/"/,"",$2); print $2; exit }
+  ' "$2"
+}

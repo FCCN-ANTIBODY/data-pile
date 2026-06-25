@@ -6,9 +6,11 @@ the ideas underneath that a README won't lead with.
 
 ## The thrust
 
-- **A tank holds; it does not reach.** Atlas processes and delivers; the pile is the durable system
-  of record. Keep that direction straight: the pile never pulls from Atlas, and Atlas never reads
-  the pile back. Atlas only writes `feed/**`.
+- **The tank collects; nothing reaches into it.** Atlas processes and publishes; the pile is the
+  durable system of record. Keep the direction straight: the pile **pulls** from Atlas's own surface
+  and persists onto its own `feed/**`; Atlas never reads the pile back and never writes into it. The
+  bytes are untrusted in transit — the **signed manifest** is what makes a delivery trustworthy, so a
+  plain public fetch is enough and no producer ever needs a credential here.
 - **Encrypted by default, provable on demand.** Privacy is the floor, not a feature flag. The whole
   apparatus exists so a *public* repo can hold *private* data that the owner can later prove is real
   without surrendering future secrecy. If a change weakens "leaks nothing until the owner decides,"

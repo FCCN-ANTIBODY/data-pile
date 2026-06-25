@@ -6,17 +6,25 @@
 # if this pile also places a public map (see atlas.anecdote.channel/CONTRACT.md).
 id: ""              # e.g. cd04-q1
 
-# Region / namespace tier, used to scope the Atlas feed branch (feed/<source>) and the
-# outbound pile/<scope>/<id> branch.
+# Region / namespace tier, used to scope the outbound pile/<scope>/<id> branch and
+# Atlas's inbound feed/<scope>/<id> branch.
 scope: ""           # e.g. colorado
 
-# Inbound sources allowed to deliver to this pile, one feed/<source> branch each.
+# Inbound sources this pile PULLS from. Atlas never writes into this repo: it publishes
+# each pile's encrypted feed on its OWN domain, and this pile fetches + verifies it.
 # Atlas is the default; add others only if you intend multiple producers.
 sources:
   - name: atlas
+    # Gateway base URL Atlas publishes this pile's encrypted feed at (its own domain).
+    # bin/ingest pulls manifest.json + blocks + seed from here. The payload is
+    # encrypted, so this is a plain public fetch — no credential, no token.
+    url: ""         # e.g. https://atlas.anecdote.channel/piles/<id>/feed/
+    # Local branch where this pile stores the verified blocks it has pulled — the
+    # durable, owner-held tank. The pile (not Atlas) commits here.
     branch: feed/atlas
-    # Commit-signing fingerprint Atlas registered for this pile. bin/verify requires the
-    # signed manifest head + feed commits to match this. Filled from the handshake.
+    # Atlas's delivery-signer fingerprint, copied BY HAND from the Atlas repo
+    # (keys/atlas.fpr) and confirmed out-of-band / IRL. bin/verify requires the signed
+    # manifest head to match this. There is no GitHub App and no write grant to Atlas.
     signer: ""      # e.g. SHA256:xxxx…
 
 # age recipient fingerprint, for cross-checking keys/pile.age.pub. Set by setup.yml.
