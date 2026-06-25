@@ -7,8 +7,8 @@ knows. On a fit, Atlas publishes the real **atlas+tell+pile address** that match
 (`bin/need-matches`) and act — re-issue a QR straight to that pile (consent intact), or drop the need.
 
 This repo is the **asker**. Its "address" is the repo itself — it may have no actual pile for this
-topic. A need is **both** a committed file here *and* a labeled Issue mirror, so it is structured for
-matching and visible as a public dangler.
+topic. A need is a committed `needs/<id>.json` here, registered on an Atlas's public "what's hanging"
+list — structured for matching and visible as a dangler at Atlas's `/needs.json`.
 
 ## Schema — `needs/<id>.json`
 
@@ -30,10 +30,11 @@ matching and visible as a public dangler.
 
 ## Flow
 
-1. Author `needs/<id>.json`; run **`bin/need <id>`** to print the Atlas registration entry + the Issue
-   mirror body. The **`need`** workflow opens the labeled Issue and a registration PR to Atlas.
+1. Author `needs/<id>.json`; run **`bin/need <id>`** to print the Atlas registration entry. The
+   **`need`** workflow opens a registration PR appending it to Atlas's `_data/needs.yml`.
 2. Atlas carries it on **`/needs.json`** and runs its matcher; matches land in Atlas's **`/matches.json`**.
 3. **`bin/need-matches`** pulls those and shows any match's address + consent flag.
-4. **Revoke** by closing the Issue (and removing the file) — the dangler stops being carried.
+4. **Revoke** by deleting `needs/<id>.json` and opening a PR that removes its entry from Atlas's
+   `_data/needs.yml` (the mirror of how it was added) — the dangler stops being carried.
 
 Pull, not push: Atlas never writes into you. It publishes; you pull and decide.

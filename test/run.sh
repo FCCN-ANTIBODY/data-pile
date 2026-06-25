@@ -109,13 +109,11 @@ ok "constitution_sha tracks live patches; DP_JUDGE_CMD plugs in"
 rm -rf reports/govern-*.json state/tell/governed.jsonl
 
 # ── request-for-pile: post a need, pull a match ───────────────────────────────
-echo "[9] bin/need emits a valid Atlas entry + a parseable need Issue block"
+echo "[9] bin/need emits a valid Atlas registration entry"
 nid="$(ls needs/*.json | head -1 | sed 's#needs/##;s#\.json##')"
-REPO=acme/civic-node bin/need "$nid" --entry | python3 -c "import sys,yaml; e=yaml.safe_load(sys.stdin)[0]; assert e['id'] and e['asker_repo']=='acme/civic-node', e" \
-  || fail "bin/need --entry not valid"
-REPO=acme/civic-node bin/need "$nid" --issue | awk '/^```need$/{f=1;next}/^```$/{f=0}f' \
-  | jq -e --arg n "$nid" '.id==$n and .asker_repo=="acme/civic-node"' >/dev/null || fail "need Issue block not parseable"
-ok "need emits registration entry + Issue mirror"
+REPO=acme/civic-node bin/need "$nid" | python3 -c "import sys,yaml; e=yaml.safe_load(sys.stdin)[0]; assert e['id'] and e['asker_repo']=='acme/civic-node', e" \
+  || fail "bin/need entry not valid"
+ok "need emits registration entry"
 
 echo "[10] bin/need-matches surfaces only this repo's matches, with consent flag"
 jq -n --arg n "$nid" '[{need_id:$n,asker_repo:"acme/civic-node",candidate:{atlas_url:"a",tell_url:"t",pile_id:"OURMATCH"},verdict:"accept",reason:"fits",consent_required:true},

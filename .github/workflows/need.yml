@@ -1,8 +1,7 @@
 name: need
 
 # Post a request-for-pile ("need") — a question with no pile yet to catch it. Opens a
-# labeled Issue mirror on THIS repo (the public dangler; closing it revokes the need) and
-# a registration PR to an Atlas's _data/needs.yml. Atlas then carries it on its public
+# registration PR to an Atlas's _data/needs.yml. Atlas then carries it on its public
 # "what's hanging" list and matches it; you pull any match with bin/need-matches.
 #
 # No write into this repo from Atlas, ever. The Atlas PR needs a fine-grained PAT
@@ -18,7 +17,6 @@ on:
 
 permissions:
   contents: read
-  issues: write
 
 env:
   ATLAS_REPO: FCCN-ANTIBODY/atlas.anecdote.channel
@@ -28,25 +26,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Open the Issue mirror
-        env:
-          GH_TOKEN: ${{ github.token }}
-          NEED: ${{ inputs.need }}
-        run: |
-          set -euo pipefail
-          sudo apt-get update && sudo apt-get install -y gh jq >/dev/null
-          REPO="$GITHUB_REPOSITORY" bin/need "$NEED" --issue > /tmp/issue.txt
-          title="$(sed -n 's/^TITLE: //p' /tmp/issue.txt)"
-          gh label create need --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || true
-          awk 'f{print} /^BODY:$/{f=1}' /tmp/issue.txt > /tmp/body.md
-          gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --label need --body-file /tmp/body.md
       - name: Register the need with Atlas (or print to paste)
         env:
           GH_TOKEN: ${{ secrets.ATLAS_PR_TOKEN }}
           NEED: ${{ inputs.need }}
         run: |
           set -euo pipefail
-          REPO="$GITHUB_REPOSITORY" bin/need "$NEED" --entry > /tmp/entry.yml
+          sudo apt-get update && sudo apt-get install -y gh jq >/dev/null
+          REPO="$GITHUB_REPOSITORY" bin/need "$NEED" > /tmp/entry.yml
           if [ -z "${GH_TOKEN:-}" ]; then
             echo "::warning::No ATLAS_PR_TOKEN — paste this into ${ATLAS_REPO}/_data/needs.yml yourself:"
             cat /tmp/entry.yml; exit 0
