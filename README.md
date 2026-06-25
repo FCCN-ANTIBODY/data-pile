@@ -46,8 +46,13 @@ Tell ──(age-encrypt + sign + hash-link)──▶ /piles/<id>/feed/*  (Tell's
 | `bin/verify` | anyone | Verify the chain, the signature against the registered signer, and ratchet commitments. |
 | `bin/ingest` | cron | Pull each source's feed from its Tell gateway `url`, verify, persist into your own `feed/*` branch + `state/`. |
 | `bin/decrypt` | owner | `age`-decrypt a block or range (needs `PILE_AGE_IDENTITY`). |
+| `bin/govern` | owner | Judge delivered answers against your per-poll constitution (`questions/`) and write a transparency report. Multichoice is mechanical; write-ins/open go to `bin/judge` (or `$DP_JUDGE_CMD`). |
 | `bin/report` | owner | Build reports from verified state. **Aggregation is yours to define.** |
 | `bin/prove` | owner | Publish a ratchet checkpoint (or the identity) so others can verify. |
+
+`questions/<source>/<poll>.json` is your **constitution** for each poll — its question, type, and
+guidance. It's yours to author and to **patch live** while a poll runs; `bin/govern` records which
+version it judged under. The QR a respondent scanned only *showed* a question; this is what governs.
 
 ## Privacy posture
 

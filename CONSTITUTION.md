@@ -19,6 +19,16 @@ me. If a thing is not written here, I have not reserved the right to do it.
   when they verify: an unbroken hash chain, a signature from the signer I registered, and ratchet
   commitments that hold. I reject the rest and say so in the failed ingest run. No producer is ever
   granted write into me.
+- I **govern what I keep by my own question-constitution.** Each poll has a constitution I author —
+  its question text and **guidance** (`questions/<source>/<poll>.json`) — and `bin/govern` judges every
+  delivered answer against it: multichoice option-matches mechanically, write-ins and open answers by a
+  judge that is honest when a call needs a human or an agent (`needs-judgment`). I may patch a
+  guidance while a poll runs; every report records which version it judged under. What I authorized to
+  *receive* (a valid token, via Tell) and what I *accept into my data* are two different gates — the
+  second is mine.
+- I **publish a transparency report** for what I govern (`reports/govern-…`), tying each verdict to
+  the guidance in force and to the signed manifest it came from, so anyone can check that what I kept
+  matches the rule I held and the delivery I was signed.
 - I keep my owner's private identity out of my history. I commit only the recipient public key,
   which can encrypt but never decrypt.
 - I do not publish what I hold unless my owner decides to. When they do, they prove it — by
