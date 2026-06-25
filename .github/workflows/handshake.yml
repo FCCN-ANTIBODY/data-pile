@@ -1,17 +1,17 @@
 name: handshake
 
-# Owner-initiated registration with Atlas. Opens a PR on atlas.anecdote.channel adding
-# this pile's entry to _data/piles.yml — the consent signal. The entry tells Atlas the
+# Owner-initiated registration with Tell. Opens a PR on tell.anecdote.channel adding
+# this pile's entry to _data/piles.yml — the consent signal. The entry tells Tell the
 # pile's age_recipient (so it can wrap each digest's ratchet seed for the owner) and the
-# feed branch it will publish to. When Atlas accepts, it begins publishing the encrypted
+# feed branch it will publish to. When Tell accepts, it begins publishing the encrypted
 # feed at /piles/<id>/feed/* on its OWN domain; this pile PULLS it via ingest.yml.
 #
-# There is NO GitHub App and NO write grant to Atlas. Trust runs the other way: the pile
-# pins Atlas's published delivery-signer fingerprint (atlas.anecdote.channel/keys/atlas.fpr)
-# into pile.yml `signer` + keys/atlas.signers, BY HAND, confirmed out-of-band / IRL.
+# There is NO GitHub App and NO write grant to Tell. Trust runs the other way: the pile
+# pins Tell's published delivery-signer fingerprint (tell.anecdote.channel/keys/tell.fpr)
+# into pile.yml `signer` + keys/tell.signers, BY HAND, confirmed out-of-band / IRL.
 #
-# Cross-repo: needs a fine-grained PAT (ATLAS_PR_TOKEN) with Contents+PR write on
-# FCCN-ANTIBODY/atlas.anecdote.channel. Without it, the job prints the entry to paste by hand.
+# Cross-repo: needs a fine-grained PAT (TELL_PR_TOKEN) with Contents+PR write on
+# FCCN-ANTIBODY/tell.anecdote.channel. Without it, the job prints the entry to paste by hand.
 
 on:
   workflow_dispatch:
@@ -20,7 +20,7 @@ permissions:
   contents: read
 
 env:
-  ATLAS_REPO: FCCN-ANTIBODY/atlas.anecdote.channel
+  TELL_REPO: FCCN-ANTIBODY/tell.anecdote.channel
 
 jobs:
   handshake:
@@ -41,20 +41,20 @@ jobs:
             echo "  age_recipient: \"${recip}\""
             echo "  repo_url: https://github.com/${GITHUB_REPOSITORY}"
           } | tee entry.yml
-      - name: Open registration PR on Atlas (or print to paste)
+      - name: Open registration PR on Tell (or print to paste)
         env:
-          GH_TOKEN: ${{ secrets.ATLAS_PR_TOKEN }}
+          GH_TOKEN: ${{ secrets.TELL_PR_TOKEN }}
         run: |
           set -euo pipefail
           if [ -z "${GH_TOKEN:-}" ]; then
-            echo "::warning::No ATLAS_PR_TOKEN — paste entry.yml into ${ATLAS_REPO}/_data/piles.yml yourself:"
+            echo "::warning::No TELL_PR_TOKEN — paste entry.yml into ${TELL_REPO}/_data/piles.yml yourself:"
             cat entry.yml; exit 0
           fi
           sudo apt-get update && sudo apt-get install -y gh
           br="handshake/${GITHUB_REPOSITORY##*/}"
           tmp="$(mktemp -d)"; cd "$tmp"
-          gh repo clone "$ATLAS_REPO" atlas -- --depth 1
-          cd atlas; git switch -c "$br"
+          gh repo clone "$TELL_REPO" tell -- --depth 1
+          cd tell; git switch -c "$br"
           cat "$GITHUB_WORKSPACE/entry.yml" >> _data/piles.yml
           git config user.name "data-pile-handshake"
           git config user.email "data-pile-handshake@users.noreply.github.com"
@@ -62,5 +62,5 @@ jobs:
           git commit -m "register pile ${GITHUB_REPOSITORY}"
           git push -u origin "$br"
           gh pr create --title "Register pile ${GITHUB_REPOSITORY}" \
-            --body "Handshake: requesting aggregation. Atlas will publish this pile's encrypted feed at /piles/<id>/feed/*; the pile pulls + verifies it. No write access to this repo is requested." \
+            --body "Handshake: requesting aggregation. Tell will publish this pile's encrypted feed at /piles/<id>/feed/*; the pile pulls + verifies it. No write access to this repo is requested." \
             --base main --head "$br"

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build a sample delivered chain — the reference for what Atlas produces per source.
+# Build a sample delivered chain — the reference for what Tell produces per source.
 # Emits inbox/{NNNNNN.enc, seed.age, manifest.json} into OUTDIR.
 #
 # Usage: test/make-fixtures.sh OUTDIR RECIPIENT NBLOCKS [SIGN_KEY]
@@ -11,7 +11,7 @@ here="$(cd "$(dirname "$0")/../bin" && pwd)"
 . "$here/lib.sh"
 
 out="$1"; recip="$2"; nblocks="$3"; signkey="${4:-}"
-src="atlas"
+src="tell"
 inbox="$out/inbox"; mkdir -p "$inbox"
 
 k="$(openssl rand -hex 32)"        # K_0

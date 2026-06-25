@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Cron entry point (PULL model): for each source in pile.yml, fetch its encrypted
-# feed from the Atlas gateway URL, verify it, and fold the verified manifest into
-# owner-side state/. Atlas never writes into this repo — this pile reaches out to
-# Atlas's own domain and collects what is addressed to it. The payload is encrypted,
+# feed from the Tell gateway URL, verify it, and fold the verified manifest into
+# owner-side state/. Tell never writes into this repo — this pile reaches out to
+# Tell's own domain and collects what is addressed to it. The payload is encrypted,
 # so the fetch needs no credential. Decryption is NOT done here (that needs the
 # identity and is the owner's explicit choice); ingest only establishes "this
 # delivery verified" and stages the blocks, tagged by source.

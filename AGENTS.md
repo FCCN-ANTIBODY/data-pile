@@ -1,14 +1,14 @@
 # Orientation
 
 This repository is one **data-pile**: a tank meant to be copied. The README covers *what* this is
-and *how* to run it; `CONTRACT.md` covers the interface with Atlas. This file is the why-shaped map —
+and *how* to run it; `CONTRACT.md` covers the interface with Tell. This file is the why-shaped map —
 the ideas underneath that a README won't lead with.
 
 ## The thrust
 
-- **The tank collects; nothing reaches into it.** Atlas processes and publishes; the pile is the
-  durable system of record. Keep the direction straight: the pile **pulls** from Atlas's own surface
-  and persists onto its own `feed/**`; Atlas never reads the pile back and never writes into it. The
+- **The tank collects; nothing reaches into it.** Tell processes and publishes; the pile is the
+  durable system of record. Keep the direction straight: the pile **pulls** from Tell's own surface
+  and persists onto its own `feed/**`; Tell never reads the pile back and never writes into it. The
   bytes are untrusted in transit — the **signed manifest** is what makes a delivery trustworthy, so a
   plain public fetch is enough and no producer ever needs a credential here.
 - **Encrypted by default, provable on demand.** Privacy is the floor, not a feature flag. The whole
@@ -33,7 +33,8 @@ the ideas underneath that a README won't lead with.
 ## Working here
 
 - **Mirror the constellation's idioms.** Signed branches + a registry anchor come straight from
-  Atlas's `pile/**` pattern, reversed onto `feed/**`. Prefer the patterns already in the sibling
+  Atlas's `pile/**` pattern (its outbound map placement), reversed onto Tell's `feed/**`. Prefer the
+  patterns already in the sibling
   repos over new machinery, and keep dependencies near zero (`age`, `git`, a JSON tool).
 - **Report aggregation is deliberately undecided.** `bin/report` ships as a documented stub. Don't
   bake in an aggregation model the project hasn't chosen yet.

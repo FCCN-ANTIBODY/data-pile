@@ -9,7 +9,7 @@ on:
     inputs:
       source:
         description: "Feed source"
-        default: atlas
+        default: tell
       from_seq:
         description: "Disclose from this seq onward (0 = whole history)"
         required: true

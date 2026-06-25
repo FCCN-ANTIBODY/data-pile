@@ -5,7 +5,7 @@
 #
 # Usage: bin/verify [--dir DIR] [--source NAME]
 #   --dir     directory holding inbox/ (default: repo root .)
-#   --source  feed source name (default: atlas)
+#   --source  feed source name (default: tell)
 #
 # Trust env (be explicit, fail closed):
 #   DP_ALLOW_UNSIGNED=1   skip the signature check (only when ssh-keygen or the signers
@@ -15,7 +15,7 @@ here="$(cd "$(dirname "$0")" && pwd)"
 . "$here/lib.sh"
 repo="$(cd "$here/.." && pwd)"
 
-dir="."; source="atlas"; signers=""
+dir="."; source="tell"; signers=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --dir) dir="$2"; shift 2;;

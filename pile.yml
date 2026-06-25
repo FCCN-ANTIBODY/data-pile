@@ -6,29 +6,29 @@
 # if this pile also places a public map (see atlas.anecdote.channel/CONTRACT.md).
 id: ""              # e.g. cd04-q1
 
-# Region / namespace tier, used to scope the outbound pile/<scope>/<id> branch and
-# Atlas's inbound feed/<scope>/<id> branch.
+# Region / namespace tier, used to scope the outbound pile/<scope>/<id> branch (on
+# Atlas) and the Tell's inbound feed/<scope>/<id> branch.
 scope: ""           # e.g. colorado
 
-# Inbound sources this pile PULLS from. Atlas never writes into this repo: it publishes
-# each pile's encrypted feed on its OWN domain, and this pile fetches + verifies it.
-# Atlas is the default; add others only if you intend multiple producers.
+# Inbound sources this pile PULLS from — a Tell. A Tell never writes into this repo:
+# it publishes this pile's encrypted feed on its OWN domain, and this pile fetches +
+# verifies it. `tell` is the default source; add others only for multiple producers.
 sources:
-  - name: atlas
-    # Gateway base URL Atlas publishes this pile's encrypted feed at (its own domain).
+  - name: tell
+    # Gateway base URL the Tell publishes this pile's encrypted feed at (its own domain).
     # bin/ingest pulls manifest.json + blocks + seed from here. The payload is
     # encrypted, so this is a plain public fetch — no credential, no token.
-    url: ""         # e.g. https://atlas.anecdote.channel/piles/<id>/feed/
+    url: ""         # e.g. https://tell.anecdote.channel/piles/<id>/feed/
     # Local branch where this pile stores the verified blocks it has pulled — the
-    # durable, owner-held tank. The pile (not Atlas) commits here.
-    branch: feed/atlas
-    # Atlas's delivery-signer fingerprint, copied BY HAND from the Atlas repo
-    # (keys/atlas.fpr) and confirmed out-of-band / IRL. bin/verify requires the signed
-    # manifest head to match this. There is no GitHub App and no write grant to Atlas.
+    # durable, owner-held tank. The pile (not the Tell) commits here.
+    branch: feed/tell
+    # The Tell's delivery-signer fingerprint, copied BY HAND from the Tell repo
+    # (keys/tell.fpr) and confirmed out-of-band / IRL. bin/verify requires the signed
+    # manifest head to match this. There is no GitHub App and no write grant to the Tell.
     signer: ""      # e.g. SHA256:xxxx…
 
 # age recipient fingerprint, for cross-checking keys/pile.age.pub. Set by setup.yml.
 age_recipient: ""   # e.g. age1xxxx… (the recipient string) or its sha256
 
-# Public URL of this repository, recorded in the Atlas registration PR.
+# Public URL of this repository, recorded in the Tell registration PR.
 repo_url: ""        # e.g. https://github.com/<owner>/<repo>

@@ -1,13 +1,13 @@
 name: ingest
 
-# Scheduled PULL: fetch each source's encrypted feed from the Atlas gateway URL,
-# verify it (signature against the registered Atlas signer + hash-linked chain),
+# Scheduled PULL: fetch each source's encrypted feed from the Tell gateway URL,
+# verify it (signature against the registered Tell signer + hash-linked chain),
 # and persist the verified blocks into this pile's OWN feed branch — the durable,
 # owner-held tank. A failed verification is the alarm: a delivery did not match the
 # registered signer or the chain was broken. The fetch needs no credential (the
 # payload is encrypted); decryption stays the owner's separate, explicit step.
 #
-# Atlas never writes here. `contents: write` is only so the pile can commit what it
+# Tell never writes here. `contents: write` is only so the pile can commit what it
 # pulled into its own branch.
 
 on:
