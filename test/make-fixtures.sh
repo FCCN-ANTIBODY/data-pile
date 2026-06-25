@@ -21,7 +21,13 @@ entries="[]"; prev="null"; kk="$k"
 i=0
 while [ "$i" -lt "$nblocks" ]; do
   seqp="$(printf '%06d' "$i")"
-  printf 'digest block seq %s — produced %s\n' "$i" "$(date -u +%FT%TZ)" > "$inbox/$seqp.plain"
+  # Optional: seal real block content from $DP_FIXTURE_CONTENT_DIR/<i>.json (used by the
+  # governance test to inject tell.digest blocks); otherwise a placeholder line.
+  if [ -n "${DP_FIXTURE_CONTENT_DIR:-}" ] && [ -f "${DP_FIXTURE_CONTENT_DIR}/$i.json" ]; then
+    cp "${DP_FIXTURE_CONTENT_DIR}/$i.json" "$inbox/$seqp.plain"
+  else
+    printf 'digest block seq %s — produced %s\n' "$i" "$(date -u +%FT%TZ)" > "$inbox/$seqp.plain"
+  fi
   dp_enc "$kk" "$inbox/$seqp.plain" "$inbox/$seqp.enc"
   rm -f "$inbox/$seqp.plain"
   this="sha256:$(dp_sha256_file "$inbox/$seqp.enc")"
