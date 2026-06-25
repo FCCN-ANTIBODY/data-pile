@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# Owner-only: unwrap the age-encrypted ratchet seed, derive ratchet keys, and decrypt
+# blocks. Requires the private age identity (never committed).
+#
+# Usage: bin/decrypt [--dir DIR] [--source NAME] (--seq N | --all) [--out DIR]
+#   identity from $PILE_AGE_IDENTITY (key text) or $DP_IDENTITY_FILE (path).
+#   --out omitted with --seq prints plaintext to stdout.
+
+here="$(cd "$(dirname "$0")" && pwd)"
+. "$here/lib.sh"
+
+dir="."; source="atlas"; seq=""; all=0; out=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --dir) dir="$2"; shift 2;;
+    --source) source="$2"; shift 2;;
+    --seq) seq="$2"; shift 2;;
+    --all) all=1; shift;;
+    --out) out="$2"; shift 2;;
+    *) dp_die "unknown arg: $1";;
+  esac
+done
+inbox="$dir/inbox"; manifest="$inbox/manifest.json"
+[ -f "$manifest" ] || dp_die "no manifest at $manifest"
+[ -f "$inbox/seed.age" ] || dp_die "no seed.age (genesis seed) in $inbox"
+
+# Resolve the identity file.
+idfile=""
+if [ -n "${DP_IDENTITY_FILE:-}" ]; then
+  idfile="$DP_IDENTITY_FILE"
+elif [ -n "${PILE_AGE_IDENTITY:-}" ]; then
+  idfile="$(mktemp)"; trap 'rm -f "$idfile"' EXIT
+  printf '%s\n' "$PILE_AGE_IDENTITY" > "$idfile"
+else
+  dp_die "no identity (set PILE_AGE_IDENTITY or DP_IDENTITY_FILE)"
+fi
+
+k="$(age -d -i "$idfile" "$inbox/seed.age")"  # K_0
+[ -n "$k" ] || dp_die "could not unwrap seed (wrong identity?)"
+
+decrypt_one() { # SEQ
+  local s="$1" kk="$k" i=0 block dest
+  while [ "$i" -lt "$s" ]; do kk="$(dp_ratchet_next "$kk")"; i=$((i+1)); done
+  # Integrity: derived key must match the published commitment.
+  local want got
+  want="$(jq -r ".entries[$s].ratchet_pub" "$manifest")"
+  got="sha256:$(dp_ratchet_pub "$kk")"
+  [ "$want" = "$got" ] || dp_die "ratchet key mismatch at seq $s"
+  block="$(jq -r ".entries[$s].block" "$manifest")"
+  if [ -n "$out" ]; then
+    mkdir -p "$out"; dest="$out/$s.txt"; dp_dec "$kk" "$inbox/$block" "$dest"
+    dp_log "decrypted seq $s -> $dest"
+  else
+    dp_dec "$kk" "$inbox/$block" "-"
+  fi
+}
+
+if [ "$all" = "1" ]; then
+  n="$(jq '.entries | length' "$manifest")"; i=0
+  while [ "$i" -lt "$n" ]; do decrypt_one "$i"; i=$((i+1)); done
+elif [ -n "$seq" ]; then
+  decrypt_one "$seq"
+else
+  dp_die "specify --seq N or --all"
+fi

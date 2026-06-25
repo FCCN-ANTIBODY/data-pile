@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# Cron entry point (PULL model): for each source in pile.yml, fetch its encrypted
+# feed from the Atlas gateway URL, verify it, and fold the verified manifest into
+# owner-side state/. Atlas never writes into this repo — this pile reaches out to
+# Atlas's own domain and collects what is addressed to it. The payload is encrypted,
+# so the fetch needs no credential. Decryption is NOT done here (that needs the
+# identity and is the owner's explicit choice); ingest only establishes "this
+# delivery verified" and stages the blocks, tagged by source.
+#
+# Usage: bin/ingest [--source NAME]   (default: every source in pile.yml)
+# Env:
+#   DP_FETCH_URL    override the gateway base URL (testing; trailing slash optional)
+#   DP_STAGE_DIR    where verified inbox/ trees are staged for the workflow to commit
+#                   into the source's local branch (default: .ingest)
+#
+# Output per verified source:
+#   state/<source>/manifest.json   the verified manifest (audit/fold target)
+#   state/<source>/ingested.log    append-only "verified N blocks" log
+#   <stage>/<source>/inbox/        the pulled, verified blocks (ingest.yml commits
+#                                  these into the source's branch = the owned tank)
+
+here="$(cd "$(dirname "$0")" && pwd)"
+. "$here/lib.sh"
+repo="$(cd "$here/.." && pwd)"
+cd "$repo"
+
+only=""; [ "${1:-}" = "--source" ] && only="$2"
+stage="${DP_STAGE_DIR:-$repo/.ingest}"
+
+sources="$(awk '$1=="-" && $2=="name:" {print $3}' pile.yml)"
+[ -n "$sources" ] || dp_die "no sources in pile.yml"
+
+# Fetch one file from the gateway base URL into a destination path. Fails closed.
+dp_fetch() { # BASEURL RELPATH DEST
+  local base="${1%/}" rel="$2" dest="$3"
+  curl -fsSL "$base/$rel" -o "$dest"
+}
+
+ingested_any=0
+for source in $sources; do
+  [ -n "$only" ] && [ "$only" != "$source" ] && continue
+  url="${DP_FETCH_URL:-$(dp_source_url "$source" pile.yml)}"
+  [ -n "$url" ] || { dp_log "skip $source (no url in pile.yml)"; continue; }
+
+  work="$(mktemp -d)"; mkdir -p "$work/inbox"
+  if ! dp_fetch "$url" "manifest.json" "$work/inbox/manifest.json"; then
+    dp_log "skip $source (no manifest at $url yet)"; rm -rf "$work"; continue
+  fi
+
+  # Pull every block the manifest names, plus the owner's wrapped seed.
+  ok=1
+  for blk in $(jq -r '.entries[].block' "$work/inbox/manifest.json"); do
+    dp_fetch "$url" "$blk" "$work/inbox/$blk" || { dp_log "fetch failed: $blk"; ok=0; break; }
+  done
+  [ "$ok" = 1 ] || { dp_log "REJECTED $source: incomplete fetch"; rm -rf "$work"; continue; }
+  dp_fetch "$url" "seed.age" "$work/inbox/seed.age" || dp_log "note: no seed.age yet (owner decrypt unavailable until genesis seed lands)"
+
+  if "$here/verify" --dir "$work" --source "$source"; then
+    mkdir -p "state/$source" "$stage/$source"
+    cp "$work/inbox/manifest.json" "state/$source/manifest.json"
+    rm -rf "$stage/$source/inbox"; cp -r "$work/inbox" "$stage/$source/inbox"
+    n="$(jq '.entries | length' "state/$source/manifest.json")"
+    printf '%s verified %s blocks (head %s)\n' "$(date -u +%FT%TZ)" "$n" \
+      "$(jq -r '.head.digest' "state/$source/manifest.json")" >> "state/$source/ingested.log"
+    dp_log "ingested $source: $n block(s) verified (staged at $stage/$source/inbox)"
+    ingested_any=1
+  else
+    dp_log "REJECTED $source: verification failed (left state untouched)"
+  fi
+  rm -rf "$work"
+done
+
+[ "$ingested_any" = 1 ] || dp_log "nothing newly ingested"
