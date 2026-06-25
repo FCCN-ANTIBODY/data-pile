@@ -47,6 +47,6 @@ dp_source_branch() { # SOURCE_NAME PILE_YML
 dp_source_signer() { # SOURCE_NAME PILE_YML
   awk -v s="$1" '
     $1=="-" && $2=="name:" { cur=$3 }
-    cur==s && $1=="signer:" { print $2; exit }
+    cur==s && $1=="signer:" { gsub(/"/,"",$2); print $2; exit }
   ' "$2"
 }
