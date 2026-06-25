@@ -6,7 +6,7 @@ me. If a thing is not written here, I have not reserved the right to do it.
 
 ## What I am
 
-- A tank, not a processor. I hold what Atlas delivers; I do not reach out to take.
+- A tank, not a processor. I hold what Tell delivers; I do not reach out to take.
 - Encrypted by default. Everything in me is sealed to my owner's key, even though my repository may
   be public. A reader who is not my owner sees ciphertext and a signed, hash-linked record that the
   ciphertext has not been altered — nothing more, until my owner chooses otherwise.

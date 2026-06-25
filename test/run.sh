@@ -14,16 +14,16 @@ age-keygen -o "$work/id.txt" 2>/dev/null
 recip="$(age-keygen -y "$work/id.txt")"
 
 # signing key + signers file (if ssh-keygen available). Kept under $work — never touches tracked keys/.
-signkey=""; allow_unsigned=""; signers="$work/atlas.signers"
+signkey=""; allow_unsigned=""; signers="$work/tell.signers"
 if command -v ssh-keygen >/dev/null 2>&1; then
-  ssh-keygen -t ed25519 -N '' -C atlas -f "$work/sign" >/dev/null
-  printf 'atlas %s\n' "$(cat "$work/sign.pub")" > "$signers"
+  ssh-keygen -t ed25519 -N '' -C tell -f "$work/sign" >/dev/null
+  printf 'tell %s\n' "$(cat "$work/sign.pub")" > "$signers"
   signkey="$work/sign"
 else
   echo "NOTE: ssh-keygen absent — signature checks SKIPPED (DP_ALLOW_UNSIGNED=1)"
   allow_unsigned=1
 fi
-vfy() { DP_ALLOW_UNSIGNED="${allow_unsigned:-0}" bin/verify --dir "$1" --source atlas --signers "$signers"; }
+vfy() { DP_ALLOW_UNSIGNED="${allow_unsigned:-0}" bin/verify --dir "$1" --source tell --signers "$signers"; }
 
 echo "[1] build a 3-block chain"
 test/make-fixtures.sh "$work/pile" "$recip" 3 "$signkey" >/dev/null
@@ -41,13 +41,13 @@ test/make-fixtures.sh "$work/pile" "$recip" 3 "$signkey" >/dev/null  # rebuild c
 
 if [ -n "$signkey" ]; then
   echo "[3b] verify fails when signed by the wrong key"
-  ssh-keygen -t ed25519 -N '' -C atlas -f "$work/evil" >/dev/null
-  printf 'atlas %s\n' "$(cat "$work/evil.pub")" > "$signers"
-  if bin/verify --dir "$work/pile" --source atlas --signers "$signers" >/dev/null 2>&1; then
+  ssh-keygen -t ed25519 -N '' -C tell -f "$work/evil" >/dev/null
+  printf 'tell %s\n' "$(cat "$work/evil.pub")" > "$signers"
+  if bin/verify --dir "$work/pile" --source tell --signers "$signers" >/dev/null 2>&1; then
     fail "verify accepted a signature from the wrong key"
   fi
   ok "wrong signer rejected"
-  printf 'atlas %s\n' "$(cat "$work/sign.pub")" > "$signers"  # restore
+  printf 'tell %s\n' "$(cat "$work/sign.pub")" > "$signers"  # restore
 fi
 
 echo "[4] owner decrypts all blocks with the identity"
@@ -58,7 +58,7 @@ ok "owner decrypt + ratchet-commitment cross-check"
 
 echo "[5] checkpoint proof: publish K_1, key-less party verifies blocks 1.."
 DP_IDENTITY_FILE="$work/id.txt" bin/prove --dir "$work/pile" --from 1 >/dev/null
-bundle="$work/pile/reports/proof-atlas-from-1.json"
+bundle="$work/pile/reports/proof-tell-from-1.json"
 cp -r "$work/pile" "$work/pub"; rm -f "$work/pub/inbox/seed.age"   # key-less checkout
 bin/prove --dir "$work/pub" --check "$bundle" >/dev/null || fail "public proof did not verify"
 ok "checkpoint proves blocks 1.. against the signed manifest"
