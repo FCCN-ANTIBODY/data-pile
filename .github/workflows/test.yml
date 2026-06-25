@@ -16,5 +16,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install age
         run: sudo apt-get update && sudo apt-get install -y age
-      - name: Run the suite
+      - name: Crypto + signature suite
         run: bash test/run.sh
+      - name: Acceptance governor suite
+        run: bash test/governor.sh

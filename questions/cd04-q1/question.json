@@ -1,0 +1,16 @@
+{
+  "qid": "cd04-q1",
+  "question": "Should the city expand protected bike lanes on College Avenue?",
+  "options": [
+    { "id": "a", "label": "Yes, expand them" },
+    { "id": "b", "label": "No, keep as-is" },
+    { "id": "c", "label": "Only with more study" }
+  ],
+  "ownership": {
+    "author": "",
+    "created_at": "2026-06-25T00:00:00Z",
+    "license": "CC-BY-4.0",
+    "original": true,
+    "note": "Recorded by the asker as original data they own. The commit that introduced this file is the timestamped anchor; the author may sign the commit for a stronger claim."
+  }
+}

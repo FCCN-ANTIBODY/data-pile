@@ -3,24 +3,28 @@
 # hash-linked continuity, and per-block ciphertext hashes. No secrets needed — anyone
 # can run this against a public pile.
 #
-# Usage: bin/verify [--dir DIR] [--source NAME]
-#   --dir     directory holding inbox/ (default: repo root .)
-#   --source  feed source name (default: atlas)
+# Usage: bin/verify [--dir DIR] [--source NAME] [--unsigned]
+#   --dir       directory holding inbox/ (default: repo root .)
+#   --source    feed source name — a Tell you joined (default: atlas)
+#   --unsigned  POLICY for unauthenticated ingress (the direct-QR path, feed/direct):
+#               do not require a registered signer. Digest + chain + per-block hashes are
+#               STILL verified; the acceptance governor (bin/accept) is the gate instead.
 #
 # Trust env (be explicit, fail closed):
-#   DP_ALLOW_UNSIGNED=1   skip the signature check (only when ssh-keygen or the signers
-#                         file is unavailable, e.g. a constrained dev box). Off by default.
+#   DP_ALLOW_UNSIGNED=1   dev bypass of the signature check when ssh-keygen or the signers
+#                         file is unavailable (e.g. a constrained dev box). Off by default.
 
 here="$(cd "$(dirname "$0")" && pwd)"
 . "$here/lib.sh"
 repo="$(cd "$here/.." && pwd)"
 
-dir="."; source="atlas"; signers=""
+dir="."; source="atlas"; signers=""; unsigned=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --dir) dir="$2"; shift 2;;
     --source) source="$2"; shift 2;;
     --signers) signers="$2"; shift 2;;
+    --unsigned) unsigned=1; shift;;
     *) dp_die "unknown arg: $1";;
   esac
 done
@@ -35,7 +39,9 @@ digest="$(dp_entries_digest "$manifest")"
 mdigest="$(jq -r '.head.digest // empty' "$manifest")"
 [ "$digest" = "$mdigest" ] || dp_die "manifest digest mismatch (head=$mdigest computed=$digest)"
 
-if [ "${DP_ALLOW_UNSIGNED:-0}" = "1" ]; then
+if [ "$unsigned" = "1" ]; then
+  dp_log "policy: unauthenticated source '$source' (direct ingress) — governor is the gate, no signer required"
+elif [ "${DP_ALLOW_UNSIGNED:-0}" = "1" ]; then
   dp_log "WARN: signature check skipped (DP_ALLOW_UNSIGNED=1)"
 elif ! command -v ssh-keygen >/dev/null 2>&1; then
   dp_die "ssh-keygen not found; cannot verify signature (set DP_ALLOW_UNSIGNED=1 to bypass)"
@@ -74,7 +80,10 @@ while [ "$i" -lt "$n" ]; do
   [ -f "$inbox/$block" ] || dp_die "missing block file $block at seq $seq"
   got="sha256:$(dp_sha256_file "$inbox/$block")"
   [ "$got" = "$this" ] || dp_die "block $block tampered at seq $seq ($got != $this)"
-  printf '%s' "$rp" | grep -Eq '^sha256:[0-9a-f]{64}$' || dp_die "bad ratchet_pub at seq $seq"
+  # ratchet_pub is required for ratchet/signed mode; direct (unsigned) blocks omit it (null).
+  if [ -n "$rp" ] && [ "$rp" != "null" ]; then
+    printf '%s' "$rp" | grep -Eq '^sha256:[0-9a-f]{64}$' || dp_die "bad ratchet_pub at seq $seq"
+  fi
 
   prev="$this"
   i=$((i+1))

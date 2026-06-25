@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Build a report from verified state. AGGREGATION IS DELIBERATELY UNDECIDED — this ships
-# as a documented stub on purpose (see AGENTS.md). It does the safe, generic part:
-# summarize what verified and arrived, and carry the signed manifest digest as provenance
-# so a published report has a signature chain back to the producer's delivery key.
+# Build a report from the governed state. AGGREGATION IS DELIBERATELY UNDECIDED — this ships
+# as a documented stub on purpose (see AGENTS.md). It does the safe, generic part: summarize
+# the acceptance ledger (accepted count + drop reasons, mirroring Atlas's rejected{} tiers)
+# per source, with the question id, carrying no plaintext.
 #
-# Define your own aggregation by reading decrypted plaintext (bin/decrypt) here. Do NOT
-# bake an aggregation model into the template until the project has chosen one.
+# Define your own aggregation by reading decrypted accepted responses here (via bin/decrypt /
+# the ratchet). Do NOT bake an aggregation model into the template until the project picks one.
 #
 # Usage: bin/report [--source NAME]
 
@@ -15,20 +15,23 @@ repo="$(cd "$here/.." && pwd)"
 cd "$repo"
 
 only=""; [ "${1:-}" = "--source" ] && only="$2"
-sources="$(awk '$1=="-" && $2=="name:" {print $3}' pile.yml)"
+sources="$(dp_tells pile.yml)"
 mkdir -p reports
 
 for source in $sources; do
   [ -n "$only" ] && [ "$only" != "$source" ] && continue
-  state="state/$source/manifest.json"
-  [ -f "$state" ] || { dp_log "no verified state for $source yet"; continue; }
+  ledger="state/$source/ledger.json"
+  [ -f "$ledger" ] || { dp_log "no governed state for $source yet"; continue; }
   out="reports/$source-summary.json"
-  jq '{ source:.source,
-        blocks:(.entries|length),
-        first:(.entries[0].created_at // null),
-        last:(.entries[-1].created_at // null),
-        provenance:{manifest_digest:.head.digest, signed:( .head.sig != null )},
-        note:"Generic summary. Aggregation of decrypted content is an extension point — see AGENTS.md." }' \
-    "$state" > "$out"
+  jq '{
+        source: .source,
+        unsigned: (.unsigned // false),
+        updated_at: .updated_at,
+        responses: (.entries | length),
+        accepted: ([.entries[] | select(.verdict=="accepted")] | length),
+        dropped:  ( reduce (.entries[] | select(.verdict=="dropped").reason) as $r ({}; .[$r] += 1) ),
+        questions: ([.entries[].qid] | unique),
+        note: "Generic governed summary (verdicts only, no plaintext). Aggregation of accepted content is an extension point — see AGENTS.md."
+      }' "$ledger" > "$out"
   dp_log "wrote $out"
 done

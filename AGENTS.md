@@ -6,9 +6,10 @@ the ideas underneath that a README won't lead with.
 
 ## The thrust
 
-- **A tank holds; it does not reach.** Atlas processes and delivers; the pile is the durable system
-  of record. Keep that direction straight: the pile never pulls from Atlas, and Atlas never reads
-  the pile back. Atlas only writes `feed/**`.
+- **A tank holds; it does not reach.** The pile's counterpart is **Tell**, not Atlas. Tells you
+  joined (and the direct-QR path) write `feed/**`; the pile verifies, governs, and stores. Keep the
+  direction straight: the pile never pulls, and **it never talks to an Atlas** at all — Atlas is a
+  separate, out-of-band queue of unmet needs that Tells report to.
 - **Encrypted by default, provable on demand.** Privacy is the floor, not a feature flag. The whole
   apparatus exists so a *public* repo can hold *private* data that the owner can later prove is real
   without surrendering future secrecy. If a change weakens "leaks nothing until the owner decides,"
@@ -24,9 +25,13 @@ the ideas underneath that a README won't lead with.
 - **Two decryption paths, on purpose.** The `age` identity (owner-only, everything) and the hash
   ratchet (scoped, publishable). They are independent; keep them independent. Proving the past must
   never require revealing the master identity.
-- **Verification is the gate.** Nothing is trusted until `bin/verify` passes: chain continuity,
-  signature against the registered signer, ratchet commitments. Ingest, reports, and proofs all build
-  on verified state — never on raw feed contents.
+- **Two gates, in order.** Crypto first: nothing is trusted until `bin/verify` passes (chain,
+  per-block hashes, and — for signed Tells — the signature against the registered signer). Then the
+  **governor**: `bin/accept` keeps only responses a question's `guidance.json` permits, recording
+  verdicts (no plaintext) to a ledger. Reports build on the *accepted* set, never raw feed contents.
+- **questions/ are law for incoming data, and the owner owns them.** Guidance edits are git-logged
+  and re-filter on the next run. Never let a CONSTITUTION or guidance harvest without a question +
+  consent, and never write plaintext or the encrypted log onto `main`.
 
 ## Working here
 

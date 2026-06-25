@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "qid": "cd04-q1",
+  "options": ["a", "b", "c"],
+  "scope": { "geo": ["cd04"] },
+  "originality_required": true,
+  "dedup_key": "nonce"
+}

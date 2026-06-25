@@ -1,11 +1,23 @@
 #!/usr/bin/env bash
-# Cron entry point: for each source in pile.yml, fetch its feed/<source> branch, verify
-# it, and fold the verified manifest into owner-side state/. Decryption is NOT done here
-# (that needs the identity and is the owner's explicit choice); ingest only establishes
-# "this delivery verified" and records what arrived, tagged by source.
+# Cron entry point and the governor pipeline. For each Tell (source) in pile.yml:
+#   fetch feed/<tell> -> bin/verify -> decrypt -> bin/accept (governor) -> signed ledger.
 #
-# Usage: bin/ingest [--source NAME]   (default: every source in pile.yml)
-#   DP_FETCH_REMOTE  remote to fetch feeds from (default: origin)
+# The ledger (state/<tell>/ledger.json) records a VERDICT per response — accepted, or
+# dropped with a reason — referencing the immutable feed entry by seq + hash. It carries
+# NO plaintext: the tank stays encrypted-at-rest while the governor's decisions are durable
+# and git-reviewable. Accepted plaintext is held only in memory for this run.
+#
+# Two source modes:
+#   signed Tell : seed.age + ratchet blocks (*.enc) + signed manifest; decrypt via ratchet.
+#   direct      : age-to-recipient blocks (*.age), unsigned manifest (no sig/ratchet_pub);
+#                 verify --unsigned (chain+hashes only), decrypt via `age -d`. The governor
+#                 is the sole gate (see CONTRACT.md).
+#
+# Acceptance needs the identity. With none, ingest does a keyless crypto audit (verify only).
+#
+# Usage: bin/ingest [--source NAME]
+#   PILE_AGE_IDENTITY / DP_IDENTITY_FILE  the age identity (enables decrypt+accept)
+#   DP_FETCH_REMOTE                       remote to fetch feeds from (default: origin)
 
 here="$(cd "$(dirname "$0")" && pwd)"
 . "$here/lib.sh"
@@ -15,31 +27,79 @@ cd "$repo"
 only=""; [ "${1:-}" = "--source" ] && only="$2"
 remote="${DP_FETCH_REMOTE:-origin}"
 
-sources="$(awk '$1=="-" && $2=="name:" {print $3}' pile.yml)"
-[ -n "$sources" ] || dp_die "no sources in pile.yml"
+# Resolve the identity once (optional).
+idfile=""
+if [ -n "${DP_IDENTITY_FILE:-}" ]; then idfile="$DP_IDENTITY_FILE"
+elif [ -n "${PILE_AGE_IDENTITY:-}" ]; then idfile="$(mktemp)"; trap 'rm -f "$idfile"' EXIT
+  printf '%s\n' "$PILE_AGE_IDENTITY" > "$idfile"
+fi
+[ -n "$idfile" ] && [ -f "$idfile" ] || dp_log "no identity — keyless audit (verify only, no governor)"
+
+seen="$(mktemp)"   # cross-Tell dedup ledger for this run
+sources="$(dp_tells pile.yml)"
+[ -n "$sources" ] || dp_die "no tells in pile.yml"
 
 for source in $sources; do
   [ -n "$only" ] && [ "$only" != "$source" ] && continue
   branch="$(dp_source_branch "$source" pile.yml)"
   [ -n "$branch" ] || { dp_log "skip $source (no branch)"; continue; }
+  unsigned="$(dp_source_unsigned "$source" pile.yml)"
+
   dp_log "fetching $branch from $remote"
   git fetch --quiet "$remote" "$branch" || { dp_log "skip $source (no remote branch yet)"; continue; }
-
   work="$(mktemp -d)"
-  # Extract inbox/ from the fetched tip without touching our index or working tree.
   if ! git archive FETCH_HEAD inbox 2>/dev/null | tar -x -C "$work" 2>/dev/null; then
     dp_log "skip $source (no inbox on branch)"; rm -rf "$work"; continue
   fi
 
-  if "$here/verify" --dir "$work" --source "$source"; then
-    mkdir -p "state/$source"
-    cp "$work/inbox/manifest.json" "state/$source/manifest.json"
-    n="$(jq '.entries | length' "state/$source/manifest.json")"
-    printf '%s verified %s blocks (head %s)\n' "$(date -u +%FT%TZ)" "$n" \
-      "$(jq -r '.head.digest' "state/$source/manifest.json")" >> "state/$source/ingested.log"
-    dp_log "ingested $source: $n block(s) verified"
-  else
-    dp_log "REJECTED $source: verification failed (left state untouched)"
+  # 1) Cryptographic verification (signed Tell strict; direct unsigned).
+  vargs=(--dir "$work" --source "$source")
+  [ "$unsigned" = "true" ] && vargs+=(--unsigned)
+  if ! "$here/verify" "${vargs[@]}"; then
+    dp_log "REJECTED $source: verification failed (left state untouched)"; rm -rf "$work"; continue
   fi
+
+  # 2) Governor needs the identity; without it, stop at the crypto audit.
+  if [ -z "$idfile" ] || [ ! -f "$idfile" ]; then
+    dp_log "$source: verified (governor skipped — no identity)"; rm -rf "$work"; continue
+  fi
+
+  manifest="$work/inbox/manifest.json"
+  k0=""; [ "$unsigned" = "true" ] || k0="$(dp_unwrap_seed "$work/inbox" "$idfile")"
+  n="$(jq '.entries | length' "$manifest")"
+  entries="[]"; i=0; acc=0; drop=0
+  while [ "$i" -lt "$n" ]; do
+    seq="$(jq -r ".entries[$i].seq" "$manifest")"
+    block="$(jq -r ".entries[$i].block" "$manifest")"
+    this="$(jq -r ".entries[$i].this_hash" "$manifest")"
+    plain="$(mktemp)"
+    if [ "$unsigned" = "true" ]; then
+      age -d -i "$idfile" "$work/inbox/$block" > "$plain" 2>/dev/null || :
+    else
+      dp_dec "$(dp_derive "$k0" "$seq")" "$work/inbox/$block" "$plain"
+    fi
+    read -r verdict reason < <(dp_accept_verdict "$plain" \
+        "$repo/questions/$(jq -r '.qid // "_"' "$plain" 2>/dev/null)/guidance.json" "$seen")
+    qid="$(jq -r '.qid // empty' "$plain" 2>/dev/null || true)"  # malformed plaintext -> empty
+    gv="$(jq -r '.version // 0' "$repo/questions/$qid/guidance.json" 2>/dev/null || echo 0)"
+    rm -f "$plain"
+    [ "$verdict" = "accepted" ] && acc=$((acc+1)) || drop=$((drop+1))
+    entries="$(printf '%s' "$entries" | jq \
+      --argjson seq "$seq" --arg block "$block" --arg th "$this" --arg qid "$qid" \
+      --arg v "$verdict" --arg r "$reason" --argjson gv "$gv" \
+      '. + [{seq:$seq, block:$block, this_hash:$th, qid:$qid, verdict:$v, reason:$r, guidance_version:$gv}]')"
+    i=$((i+1))
+  done
+
+  uns="false"; [ "$unsigned" = "true" ] && uns="true"
+  mkdir -p "state/$source"
+  jq -n --arg src "$source" --argjson uns "$uns" \
+        --arg ts "$(date -u +%FT%TZ)" --argjson e "$entries" \
+        '{source:$src, unsigned:$uns, updated_at:$ts, entries:$e}' \
+        > "state/$source/ledger.json"
+  printf '%s accepted %s dropped %s of %s responses\n' "$(date -u +%FT%TZ)" "$acc" "$drop" "$n" \
+    >> "state/$source/ingested.log"
+  dp_log "$source: governed $n response(s) — $acc accepted, $drop dropped"
   rm -rf "$work"
 done
+rm -f "$seen"

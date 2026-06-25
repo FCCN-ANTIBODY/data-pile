@@ -45,7 +45,7 @@ jobs:
           gh secret set PILE_AGE_IDENTITY < identity.txt
           shred -u identity.txt
 
-          # Fill pile.yml identity fields (leave signer to the handshake).
+          # Fill pile.yml identity fields (a Tell's signer is recorded later, when you join it).
           repo_url="https://github.com/${GITHUB_REPOSITORY}"
           sed -i \
             -e "s|^id: .*|id: \"${PILE_ID}\"|" \

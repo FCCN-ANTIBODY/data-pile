@@ -1,13 +1,14 @@
 name: ingest
 
-# Scheduled audit: fetch every feed/<source> branch and verify it. A failed verification
-# is the alarm — it means a delivery did not match the registered signer or the chain was
-# broken. Verification needs no secrets; decryption is the owner's explicit, separate step.
+# Scheduled governor. Per source (each Tell you joined, plus the direct path): fetch the
+# feed, verify it cryptographically, decrypt, and run the acceptance governor against each
+# question's guidance. The durable output is the verdict ledger (state/<src>/ledger.json) —
+# verdicts + hashes, NO plaintext — force-committed to main as the pile's reviewable record.
 #
-# State persistence is intentionally left to the owner: this job surfaces results in the run
-# summary and as an artifact rather than committing into `main` (main is the clean public
-# face — the authoritative log lives on feed/**). Uncomment the commit step if you want a
-# durable state/ on a dedicated branch.
+# This job is secret-bearing by design (the user's "automated accept on cron" choice): it
+# holds PILE_AGE_IDENTITY to decrypt. Tradeoff: the identity is exercised in CI. Owners who
+# prefer to keep the key off CI can drop the secret — ingest then does a keyless crypto audit
+# (verify only) — and run `bin/ingest` locally to govern.
 
 on:
   schedule:
@@ -15,7 +16,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   ingest:
@@ -26,17 +27,25 @@ jobs:
           fetch-depth: 0
       - name: Install age
         run: sudo apt-get update && sudo apt-get install -y age
-      - name: Verify and fold feeds into state/
+      - name: Verify, decrypt, govern
+        env:
+          PILE_AGE_IDENTITY: ${{ secrets.PILE_AGE_IDENTITY }}
         run: bin/ingest
-      - name: Surface verified state
+      - name: Publish the verdict ledgers (no plaintext)
+        run: |
+          set -euo pipefail
+          git add -f state/*/ledger.json 2>/dev/null || true
+          if ! git diff --cached --quiet; then
+            git config user.name  "data-pile-ingest"
+            git config user.email "data-pile-ingest@users.noreply.github.com"
+            git commit -m "ingest: refresh verdict ledger $(date -u +%FT%TZ)"
+            git push
+          else
+            echo "no ledger changes"
+          fi
+      - name: Surface results
         if: always()
         run: |
           { echo '## Ingest results'; echo '```'; \
             for f in state/*/ingested.log; do [ -f "$f" ] && { echo "$f:"; tail -n 3 "$f"; }; done; \
             echo '```'; } >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: pile-state
-          path: state/
-          if-no-files-found: ignore

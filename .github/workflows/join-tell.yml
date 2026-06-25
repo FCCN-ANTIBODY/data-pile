@@ -1,0 +1,80 @@
+name: join-tell
+
+# Join a Tell so it will solicit one of this pile's questions and deliver responses to
+# feed/<tell>. Opens a PR on the Tell registering: this pile's repo, its age recipient, the
+# target feed branch, and a reference to the question (<qid>). Jurisdiction/scale is whatever
+# this pile's CONSTITUTION declares — negotiated on this PR. The pile never contacts Atlas.
+#
+# Cross-repo: needs a fine-grained PAT (TELL_PR_TOKEN) with Contents+PR write on the target
+# Tell. Without it, the job prints the join request to submit by hand.
+#
+# NOTE: the Tell's exact intake path is defined by the Tell engine (still being built); this
+# scaffold writes a conventional joins/<pile>.yml and is the data-pile's half of the contract.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tell_repo:
+        description: "Target Tell repo, e.g. owner/some-tell"
+        required: true
+      qid:
+        description: "Question id under questions/<qid>/ to solicit"
+        required: true
+      tell_name:
+        description: "Local name for this Tell (feed/<name>); defaults to the repo name"
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  join:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assemble the join request
+        id: req
+        env:
+          QID: ${{ inputs.qid }}
+          TELL_REPO: ${{ inputs.tell_repo }}
+          TELL_NAME: ${{ inputs.tell_name }}
+        run: |
+          set -euo pipefail
+          [ -d "questions/$QID" ] || { echo "::error::no questions/$QID"; exit 1; }
+          name="$TELL_NAME"; [ -n "$name" ] || name="${TELL_REPO##*/}"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          recip="$(cat keys/pile.age.pub)"
+          {
+            echo "pile: https://github.com/${GITHUB_REPOSITORY}"
+            echo "feed: feed/${name}"
+            echo "age_recipient: \"${recip}\""
+            echo "question_ref: $QID"
+            echo "scope: \"$(awk '$1=="scope:"{gsub(/[\"]/,"",$2);print $2}' pile.yml)\""
+          } | tee join.yml
+      - name: Open the join PR on the Tell (or print to submit by hand)
+        env:
+          GH_TOKEN: ${{ secrets.TELL_PR_TOKEN }}
+          TELL_REPO: ${{ inputs.tell_repo }}
+          QID: ${{ inputs.qid }}
+          NAME: ${{ steps.req.outputs.name }}
+        run: |
+          set -euo pipefail
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::warning::No TELL_PR_TOKEN — submit join.yml to ${TELL_REPO} (joins/) yourself:"
+            cat join.yml; exit 0
+          fi
+          sudo apt-get update && sudo apt-get install -y gh
+          br="join/${GITHUB_REPOSITORY##*/}"
+          tmp="$(mktemp -d)"; cd "$tmp"
+          gh repo clone "$TELL_REPO" tell -- --depth 1
+          cd tell; git switch -c "$br"
+          mkdir -p joins
+          cp "$GITHUB_WORKSPACE/join.yml" "joins/${GITHUB_REPOSITORY##*/}.yml"
+          git config user.name "data-pile-join"
+          git config user.email "data-pile-join@users.noreply.github.com"
+          git add joins/
+          git commit -m "join: ${GITHUB_REPOSITORY} solicits ${QID}"
+          git push -u origin "$br"
+          gh pr create --title "Join: ${GITHUB_REPOSITORY} (${QID})" \
+            --body "This pile asks to join. Deliver responses to feed/${NAME} in our repo; encrypt to the age recipient in joins/." \
+            --base main --head "$br"

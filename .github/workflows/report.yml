@@ -1,8 +1,8 @@
 name: report
 
-# Build reports from verified state and publish them to reports/ on main. Aggregation is a
-# documented stub (see bin/report and AGENTS.md) — this publishes the generic summary with
-# the signed manifest digest as provenance. Define your own aggregation in bin/report.
+# Build reports from governed state and publish them to reports/ on main. Aggregation is a
+# documented stub (see bin/report and AGENTS.md) — this publishes a generic summary of the
+# acceptance ledger (verdicts only, no plaintext). Define your own aggregation in bin/report.
 
 on:
   schedule:
@@ -21,9 +21,11 @@ jobs:
           fetch-depth: 0
       - name: Install age
         run: sudo apt-get update && sudo apt-get install -y age
-      - name: Refresh verified state, then build reports
+      - name: Refresh governed state, then build reports
+        env:
+          PILE_AGE_IDENTITY: ${{ secrets.PILE_AGE_IDENTITY }}
         run: |
-          bin/ingest      # verify feeds -> state/ (state/ is gitignored; rebuilt each run)
+          bin/ingest      # verify -> decrypt -> govern -> state/<src>/ledger.json (gitignored)
           bin/report
       - name: Publish if changed
         run: |

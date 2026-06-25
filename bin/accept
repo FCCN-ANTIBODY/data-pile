@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# The acceptance governor, standalone. Decide a single decrypted response against a
+# question's guidance. bin/ingest calls the same core (dp_accept_verdict) in batch and
+# records verdicts to a ledger; this wrapper is for ad-hoc owner use and tests.
+#
+# Usage: bin/accept --resp FILE [--guidance FILE | --qid QID] [--seen FILE]
+#   --resp      a decrypted response JSON ({qid, option, [geo], [dedup_key], [original]})
+#   --guidance  guidance.json to check against; or --qid to resolve questions/<qid>/guidance.json
+#   --seen      cross-call dedup ledger (default: a throwaway temp, so dedup is a no-op)
+# Prints: "<verdict> <reason>" and exits 0 if accepted, 3 if dropped.
+
+here="$(cd "$(dirname "$0")" && pwd)"
+. "$here/lib.sh"
+repo="$(cd "$here/.." && pwd)"
+
+resp=""; guidance=""; qid=""; seen=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --resp) resp="$2"; shift 2;;
+    --guidance) guidance="$2"; shift 2;;
+    --qid) qid="$2"; shift 2;;
+    --seen) seen="$2"; shift 2;;
+    *) dp_die "unknown arg: $1";;
+  esac
+done
+[ -n "$resp" ] && [ -f "$resp" ] || dp_die "need --resp FILE"
+[ -n "$guidance" ] || guidance="$repo/questions/${qid:-$(jq -r '.qid // empty' "$resp")}/guidance.json"
+[ -f "$guidance" ] || dp_die "no guidance at $guidance"
+[ -n "$seen" ] || { seen="$(mktemp)"; trap 'rm -f "$seen"' EXIT; }
+
+read -r verdict reason < <(dp_accept_verdict "$resp" "$guidance" "$seen")
+echo "$verdict $reason"
+[ "$verdict" = "accepted" ]

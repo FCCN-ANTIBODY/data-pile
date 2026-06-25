@@ -2,25 +2,34 @@
 # This is the public face of the pile — no secrets live here. The private age identity
 # lives only in the repo secret PILE_AGE_IDENTITY, never in the repository.
 
-# Stable slug for this pile. Also the path segment Atlas serves an outbound map from,
-# if this pile also places a public map (see atlas.anecdote.channel/CONTRACT.md).
+# Stable slug for this pile.
 id: ""              # e.g. cd04-q1
 
-# Region / namespace tier, used to scope the Atlas feed branch (feed/<source>) and the
-# outbound pile/<scope>/<id> branch.
+# Region / namespace / scale this pile speaks for — whatever your CONSTITUTION declares,
+# from "board of commissioners" to "water district 9" to "my D&D group". Negotiated when
+# you open a join PR on a Tell.
 scope: ""           # e.g. colorado
 
-# Inbound sources allowed to deliver to this pile, one feed/<source> branch each.
-# Atlas is the default; add others only if you intend multiple producers.
-sources:
-  - name: atlas
+# The Tells you have joined. Each is an inbound source delivering to its own feed branch,
+# independently encrypted. `signer` is the Tell's commit-signing fingerprint (filled when
+# you join). A source marked `unsigned: true` is unauthenticated by design (the direct-QR
+# path) — the acceptance governor is its only gate.
+tells:
+  - name: atlas        # PLACEHOLDER — replace with a Tell you actually joined.
     branch: feed/atlas
-    # Commit-signing fingerprint Atlas registered for this pile. bin/verify requires the
-    # signed manifest head + feed commits to match this. Filled from the handshake.
-    signer: ""      # e.g. SHA256:xxxx…
+    signer: ""         # e.g. SHA256:xxxx…
+  - name: direct       # the direct-QR ingress path; respondents age-encrypt to this pile.
+    branch: feed/direct
+    unsigned: true
 
-# age recipient fingerprint, for cross-checking keys/pile.age.pub. Set by setup.yml.
-age_recipient: ""   # e.g. age1xxxx… (the recipient string) or its sha256
+# The questions this pile owns and solicits. Each lives under questions/<qid>/ and its
+# guidance.json governs what answers are tolerated. `tells` lists which sources solicit it.
+questions:
+  - qid: ""            # e.g. cd04-q1; must match a questions/<qid>/ directory
+    tells: [atlas, direct]
 
-# Public URL of this repository, recorded in the Atlas registration PR.
+# age recipient — cross-checks keys/pile.age.pub. Set by setup.yml.
+age_recipient: ""   # e.g. age1xxxx…
+
+# Public URL of this repository, recorded when you join a Tell.
 repo_url: ""        # e.g. https://github.com/<owner>/<repo>
