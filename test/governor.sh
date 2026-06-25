@@ -68,7 +68,8 @@ git worktree add -q --detach "$work/wt"
 stage() { # BRANCH SRCDIR
   ( cd "$work/wt" && git checkout -q --orphan "$1" && (git rm -rq --cached . 2>/dev/null || true) \
     && rm -rf ./* 2>/dev/null; mkdir -p inbox && cp "$2"/inbox/* inbox/ \
-    && git add inbox && git commit -qm "feed $1" ); }
+    && git add inbox \
+    && git -c user.email=test@data-pile.local -c user.name=test commit -qm "feed $1" ); }
 stage feed/atlas  "$work/a"
 stage feed/direct "$work/d"
 git worktree remove --force "$work/wt"
