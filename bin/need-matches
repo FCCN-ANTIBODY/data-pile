@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Pull an Atlas's published matches and show any that answer THIS repo's needs. Atlas
+# never writes to you; it publishes /matches.json and you pull it. A match is an
+# invitation: you act by re-issuing a QR straight to the matched pile (consent intact),
+# or you drop the need. With `consent_required: false`, the asker pre-authorized the use
+# (the need's `terms`) and may use the matched pile immediately.
+#
+#   bin/need-matches
+# Env:
+#   ATLAS_MATCHES_URL   default https://atlas.anecdote.channel/matches.json
+#   REPO                owner/name (default $GITHUB_REPOSITORY, else pile.yml repo_url)
+set -euo pipefail
+here="$(cd "$(dirname "$0")" && pwd)"
+. "$here/lib.sh"
+repo_root="$(cd "$here/.." && pwd)"
+url="${ATLAS_MATCHES_URL:-https://atlas.anecdote.channel/matches.json}"
+
+repo="${REPO:-${GITHUB_REPOSITORY:-}}"
+[ -n "$repo" ] || repo="$(awk -F'github.com/' '/repo_url:/{gsub(/[" ]/,"",$2); print $2}' "$repo_root/pile.yml" 2>/dev/null || true)"
+[ -n "$repo" ] || dp_die "set REPO=owner/name (or pile.yml repo_url)"
+
+mine="$(cd "$repo_root/needs" 2>/dev/null && ls *.json 2>/dev/null | sed 's/\.json$//' | jq -R . | jq -cs . || echo '[]')"
+[ "$mine" != "[]" ] || { dp_log "no needs in this repo"; exit 0; }
+
+tmp="$(mktemp)"
+curl -fsSL "$url" -o "$tmp" || dp_die "could not fetch matches at $url"
+
+hits="$(jq --arg repo "$repo" --argjson mine "$mine" \
+  '[ .[] | select(.asker_repo==$repo and (.need_id as $n | $mine | index($n))) ]' "$tmp")"
+n="$(printf '%s' "$hits" | jq 'length')"
+if [ "$n" = 0 ]; then dp_log "nothing matched yet for $repo's needs"; exit 0; fi
+
+printf '%s' "$hits" | jq -r '.[] |
+  "need \(.need_id): match \(.candidate.pile_id) via \(.candidate.tell_url) (listed on \(.candidate.atlas_url))\n" +
+  "  verdict: \(.verdict)  consent_required: \(.consent_required)\n" +
+  "  → \(if .consent_required then "re-issue a QR to that pile to opt in" else "pre-authorized by your terms; you may use it now" end)"'

@@ -1,0 +1,53 @@
+name: need
+
+# Post a request-for-pile ("need") — a question with no pile yet to catch it. Opens a
+# registration PR to an Atlas's _data/needs.yml. Atlas then carries it on its public
+# "what's hanging" list and matches it; you pull any match with bin/need-matches.
+#
+# No write into this repo from Atlas, ever. The Atlas PR needs a fine-grained PAT
+# (ATLAS_PR_TOKEN, Contents+PR write on the Atlas repo); without it, the entry is printed
+# to paste by hand.
+
+on:
+  workflow_dispatch:
+    inputs:
+      need:
+        description: "Need id (a needs/<id>.json must exist)"
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  ATLAS_REPO: FCCN-ANTIBODY/atlas.anecdote.channel
+
+jobs:
+  need:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Register the need with Atlas (or print to paste)
+        env:
+          GH_TOKEN: ${{ secrets.ATLAS_PR_TOKEN }}
+          NEED: ${{ inputs.need }}
+        run: |
+          set -euo pipefail
+          sudo apt-get update && sudo apt-get install -y gh jq >/dev/null
+          REPO="$GITHUB_REPOSITORY" bin/need "$NEED" > /tmp/entry.yml
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::warning::No ATLAS_PR_TOKEN — paste this into ${ATLAS_REPO}/_data/needs.yml yourself:"
+            cat /tmp/entry.yml; exit 0
+          fi
+          br="need/${GITHUB_REPOSITORY##*/}-${NEED}"
+          tmp="$(mktemp -d)"; cd "$tmp"
+          gh repo clone "$ATLAS_REPO" atlas -- --depth 1
+          cd atlas; git switch -c "$br"
+          cat /tmp/entry.yml >> _data/needs.yml
+          git config user.name "data-pile-need"
+          git config user.email "data-pile-need@users.noreply.github.com"
+          git add _data/needs.yml
+          git commit -m "carry need ${GITHUB_REPOSITORY}#${NEED}"
+          git push -u origin "$br"
+          gh pr create --title "Carry need ${GITHUB_REPOSITORY}#${NEED}" \
+            --body "Request-for-pile: please carry this on /needs.json and match it. No write access to my repo is requested; I pull matches from /matches.json." \
+            --base main --head "$br"

@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# Emit a request-for-pile ("need") from its single source of truth, needs/<id>.json:
+# the registration entry Atlas carries on its public "what's hanging" list. The need.yml
+# workflow appends this to an Atlas's _data/needs.yml via a PR. Pull, not push: Atlas
+# never writes here; it publishes what's hanging and you pull matches (bin/need-matches).
+#
+#   bin/need <id>
+#   REPO   owner/name (default: $GITHUB_REPOSITORY, else parsed from pile.yml repo_url)
+set -euo pipefail
+here="$(cd "$(dirname "$0")" && pwd)"
+. "$here/lib.sh"
+repo_root="$(cd "$here/.." && pwd)"
+
+id="${1:?usage: bin/need <id>}"
+f="$repo_root/needs/$id.json"
+[ -f "$f" ] || dp_die "no need at needs/$id.json"
+jq -e . "$f" >/dev/null 2>&1 || dp_die "needs/$id.json is not valid JSON"
+
+repo="${REPO:-${GITHUB_REPOSITORY:-}}"
+[ -n "$repo" ] || repo="$(awk -F'github.com/' '/repo_url:/{gsub(/[" ]/,"",$2); print $2}' "$repo_root/pile.yml" 2>/dev/null || true)"
+[ -n "$repo" ] || repo="OWNER/REPO"
+need_url="https://github.com/$repo/blob/main/needs/$id.json"
+
+scope="$(jq -r '.scope // ""' "$f")"; topic="$(jq -r '.topic // ""' "$f")"
+terms="$(jq -r '.terms // ""' "$f")"
+
+cat <<YAML
+- id: $id
+  asker_repo: $repo
+  scope: "$scope"
+  topic: "$topic"
+  terms: "$terms"
+  need_url: $need_url
+YAML
