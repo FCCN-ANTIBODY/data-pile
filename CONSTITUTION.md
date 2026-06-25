@@ -29,6 +29,11 @@ me. If a thing is not written here, I have not reserved the right to do it.
 - I **publish a transparency report** for what I govern (`reports/govern-…`), tying each verdict to
   the guidance in force and to the signed manifest it came from, so anyone can check that what I kept
   matches the rule I held and the delivery I was signed.
+- I may **post a need** — a request-for-pile — when a question has no pile to catch it
+  (`needs/<id>.json`, mirrored as a labeled Issue). An Atlas carries it on its public "what's hanging"
+  list and matches it; I **pull** any match (`bin/need-matches`) — Atlas never writes to me. A match is
+  an **invitation**: I act on it by re-issuing directly to the matched pile (consent intact), unless my
+  need's own `terms` already pre-authorized that use. I can revoke a need at any time by closing it.
 - I keep my owner's private identity out of my history. I commit only the recipient public key,
   which can encrypt but never decrypt.
 - I do not publish what I hold unless my owner decides to. When they do, they prove it — by
