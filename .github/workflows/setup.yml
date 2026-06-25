@@ -1,0 +1,63 @@
+name: setup
+
+# One-time bootstrap. Generates the pile's age keypair, commits ONLY the recipient
+# public key, and stores the private identity as the PILE_AGE_IDENTITY secret. The
+# private identity is never printed and never committed.
+#
+# Requires a token that can write repo secrets (Actions secrets API). The default
+# GITHUB_TOKEN cannot; provide a fine-grained PAT as the SETUP_TOKEN secret with
+# "Secrets: read and write" + "Contents: read and write" on this repo.
+
+on:
+  workflow_dispatch:
+    inputs:
+      id:
+        description: "Pile id (slug), e.g. cd04-q1"
+        required: true
+      scope:
+        description: "Scope/namespace, e.g. colorado"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install age + gh
+        run: sudo apt-get update && sudo apt-get install -y age gh
+      - name: Generate keypair, commit public recipient, store private identity
+        env:
+          GH_TOKEN: ${{ secrets.SETUP_TOKEN }}
+          PILE_ID: ${{ inputs.id }}
+          PILE_SCOPE: ${{ inputs.scope }}
+        run: |
+          set -euo pipefail
+          [ -n "${GH_TOKEN:-}" ] || { echo "::error::SETUP_TOKEN secret required (secrets:write)"; exit 1; }
+          umask 077
+          age-keygen -o identity.txt 2>/dev/null
+          recip="$(age-keygen -y identity.txt)"
+          echo "$recip" > keys/pile.age.pub
+
+          # Store the private identity as a secret; never echo it.
+          gh secret set PILE_AGE_IDENTITY < identity.txt
+          shred -u identity.txt
+
+          # Fill pile.yml identity fields (leave signer to the handshake).
+          repo_url="https://github.com/${GITHUB_REPOSITORY}"
+          sed -i \
+            -e "s|^id: .*|id: \"${PILE_ID}\"|" \
+            -e "s|^scope: .*|scope: \"${PILE_SCOPE}\"|" \
+            -e "s|^age_recipient: .*|age_recipient: \"${recip}\"|" \
+            -e "s|^repo_url: .*|repo_url: \"${repo_url}\"|" \
+            pile.yml
+
+          git config user.name  "data-pile-setup"
+          git config user.email "data-pile-setup@users.noreply.github.com"
+          git add keys/pile.age.pub pile.yml
+          git commit -m "setup: register pile identity (recipient public key only)"
+          git push
+          echo "## Setup complete" >> "$GITHUB_STEP_SUMMARY"
+          echo "Recipient: \`${recip}\`. Private identity stored as PILE_AGE_IDENTITY." >> "$GITHUB_STEP_SUMMARY"

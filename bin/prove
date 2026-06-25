@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+# Disclosure. Two modes:
+#
+#   bin/prove --from N [--dir DIR] [--source NAME]
+#       OWNER: derive checkpoint key K_N from the seed and emit a proof bundle to
+#       reports/proof-<source>-from-<N>.json. Publishing it lets ANYONE decrypt blocks
+#       seq>=N and confirm they match the signed manifest. Forward-only: K_N never
+#       reveals blocks before N.
+#
+#   bin/prove --check FILE [--dir DIR]
+#       PUBLIC: given a published proof bundle and a (key-less) checkout, derive forward
+#       from the checkpoint, decrypt blocks, and verify each against the signed manifest.
+#
+# Owner mode needs the identity (PILE_AGE_IDENTITY / DP_IDENTITY_FILE); check mode needs nothing.
+
+here="$(cd "$(dirname "$0")" && pwd)"
+. "$here/lib.sh"
+
+dir="."; source="atlas"; from=""; check=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --dir) dir="$2"; shift 2;;
+    --source) source="$2"; shift 2;;
+    --from) from="$2"; shift 2;;
+    --check) check="$2"; shift 2;;
+    *) dp_die "unknown arg: $1";;
+  esac
+done
+inbox="$dir/inbox"; manifest="$inbox/manifest.json"
+[ -f "$manifest" ] || dp_die "no manifest at $manifest"
+
+if [ -n "$check" ]; then
+  [ -f "$check" ] || dp_die "no proof bundle at $check"
+  cp_from="$(jq -r '.from_seq' "$check")"
+  kk="$(jq -r '.checkpoint_key' "$check")"
+  n="$(jq '.entries | length' "$manifest")"
+  s="$cp_from"
+  while [ "$s" -lt "$n" ]; do
+    want="$(jq -r ".entries[$s].ratchet_pub" "$manifest")"
+    got="sha256:$(dp_ratchet_pub "$kk")"
+    [ "$want" = "$got" ] || dp_die "checkpoint fails at seq $s (ratchet_pub mismatch)"
+    block="$(jq -r ".entries[$s].block" "$manifest")"
+    dp_dec "$kk" "$inbox/$block" "-" >/dev/null || dp_die "decrypt failed at seq $s"
+    kk="$(dp_ratchet_next "$kk")"
+    s=$((s+1))
+  done
+  dp_log "OK: proof verifies blocks $cp_from..$((n-1)) against the signed manifest"
+  echo "proven"
+  exit 0
+fi
+
+[ -n "$from" ] || dp_die "specify --from N or --check FILE"
+[ -f "$inbox/seed.age" ] || dp_die "no seed.age in $inbox"
+idfile=""
+if [ -n "${DP_IDENTITY_FILE:-}" ]; then idfile="$DP_IDENTITY_FILE"
+elif [ -n "${PILE_AGE_IDENTITY:-}" ]; then idfile="$(mktemp)"; trap 'rm -f "$idfile"' EXIT
+  printf '%s\n' "$PILE_AGE_IDENTITY" > "$idfile"
+else dp_die "no identity (set PILE_AGE_IDENTITY or DP_IDENTITY_FILE)"; fi
+
+k="$(age -d -i "$idfile" "$inbox/seed.age")"
+i=0; while [ "$i" -lt "$from" ]; do k="$(dp_ratchet_next "$k")"; i=$((i+1)); done
+
+mkdir -p "$dir/reports"
+bundle="$dir/reports/proof-$source-from-$from.json"
+jq -n --arg src "$source" --argjson from "$from" --arg key "$k" \
+      --arg dg "$(jq -r '.head.digest' "$manifest")" '
+  { source:$src, from_seq:$from, checkpoint_key:$key, manifest_digest:$dg,
+    note:"Publish this to prove blocks seq>=from_seq. Anyone: bin/prove --check this-file." }' \
+  > "$bundle"
+dp_log "wrote $bundle (publishing it discloses blocks $from.. ; earlier blocks stay sealed)"
+echo "$bundle"

@@ -1,0 +1,42 @@
+name: ingest
+
+# Scheduled audit: fetch every feed/<source> branch and verify it. A failed verification
+# is the alarm — it means a delivery did not match the registered signer or the chain was
+# broken. Verification needs no secrets; decryption is the owner's explicit, separate step.
+#
+# State persistence is intentionally left to the owner: this job surfaces results in the run
+# summary and as an artifact rather than committing into `main` (main is the clean public
+# face — the authoritative log lives on feed/**). Uncomment the commit step if you want a
+# durable state/ on a dedicated branch.
+
+on:
+  schedule:
+    - cron: "23 * * * *" # hourly, best-effort
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install age
+        run: sudo apt-get update && sudo apt-get install -y age
+      - name: Verify and fold feeds into state/
+        run: bin/ingest
+      - name: Surface verified state
+        if: always()
+        run: |
+          { echo '## Ingest results'; echo '```'; \
+            for f in state/*/ingested.log; do [ -f "$f" ] && { echo "$f:"; tail -n 3 "$f"; }; done; \
+            echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pile-state
+          path: state/
+          if-no-files-found: ignore

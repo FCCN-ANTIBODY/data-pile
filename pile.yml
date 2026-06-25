@@ -1,0 +1,26 @@
+# Identity of this data-pile. `setup.yml` fills the generated values; you fill the rest.
+# This is the public face of the pile — no secrets live here. The private age identity
+# lives only in the repo secret PILE_AGE_IDENTITY, never in the repository.
+
+# Stable slug for this pile. Also the path segment Atlas serves an outbound map from,
+# if this pile also places a public map (see atlas.anecdote.channel/CONTRACT.md).
+id: ""              # e.g. cd04-q1
+
+# Region / namespace tier, used to scope the Atlas feed branch (feed/<source>) and the
+# outbound pile/<scope>/<id> branch.
+scope: ""           # e.g. colorado
+
+# Inbound sources allowed to deliver to this pile, one feed/<source> branch each.
+# Atlas is the default; add others only if you intend multiple producers.
+sources:
+  - name: atlas
+    branch: feed/atlas
+    # Commit-signing fingerprint Atlas registered for this pile. bin/verify requires the
+    # signed manifest head + feed commits to match this. Filled from the handshake.
+    signer: ""      # e.g. SHA256:xxxx…
+
+# age recipient fingerprint, for cross-checking keys/pile.age.pub. Set by setup.yml.
+age_recipient: ""   # e.g. age1xxxx… (the recipient string) or its sha256
+
+# Public URL of this repository, recorded in the Atlas registration PR.
+repo_url: ""        # e.g. https://github.com/<owner>/<repo>

@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# Build a report from verified state. AGGREGATION IS DELIBERATELY UNDECIDED — this ships
+# as a documented stub on purpose (see AGENTS.md). It does the safe, generic part:
+# summarize what verified and arrived, and carry the signed manifest digest as provenance
+# so a published report has a signature chain back to the producer's delivery key.
+#
+# Define your own aggregation by reading decrypted plaintext (bin/decrypt) here. Do NOT
+# bake an aggregation model into the template until the project has chosen one.
+#
+# Usage: bin/report [--source NAME]
+
+here="$(cd "$(dirname "$0")" && pwd)"
+. "$here/lib.sh"
+repo="$(cd "$here/.." && pwd)"
+cd "$repo"
+
+only=""; [ "${1:-}" = "--source" ] && only="$2"
+sources="$(awk '$1=="-" && $2=="name:" {print $3}' pile.yml)"
+mkdir -p reports
+
+for source in $sources; do
+  [ -n "$only" ] && [ "$only" != "$source" ] && continue
+  state="state/$source/manifest.json"
+  [ -f "$state" ] || { dp_log "no verified state for $source yet"; continue; }
+  out="reports/$source-summary.json"
+  jq '{ source:.source,
+        blocks:(.entries|length),
+        first:(.entries[0].created_at // null),
+        last:(.entries[-1].created_at // null),
+        provenance:{manifest_digest:.head.digest, signed:( .head.sig != null )},
+        note:"Generic summary. Aggregation of decrypted content is an extension point — see AGENTS.md." }' \
+    "$state" > "$out"
+  dp_log "wrote $out"
+done

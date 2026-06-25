@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# Cron entry point: for each source in pile.yml, fetch its feed/<source> branch, verify
+# it, and fold the verified manifest into owner-side state/. Decryption is NOT done here
+# (that needs the identity and is the owner's explicit choice); ingest only establishes
+# "this delivery verified" and records what arrived, tagged by source.
+#
+# Usage: bin/ingest [--source NAME]   (default: every source in pile.yml)
+#   DP_FETCH_REMOTE  remote to fetch feeds from (default: origin)
+
+here="$(cd "$(dirname "$0")" && pwd)"
+. "$here/lib.sh"
+repo="$(cd "$here/.." && pwd)"
+cd "$repo"
+
+only=""; [ "${1:-}" = "--source" ] && only="$2"
+remote="${DP_FETCH_REMOTE:-origin}"
+
+sources="$(awk '$1=="-" && $2=="name:" {print $3}' pile.yml)"
+[ -n "$sources" ] || dp_die "no sources in pile.yml"
+
+for source in $sources; do
+  [ -n "$only" ] && [ "$only" != "$source" ] && continue
+  branch="$(dp_source_branch "$source" pile.yml)"
+  [ -n "$branch" ] || { dp_log "skip $source (no branch)"; continue; }
+  dp_log "fetching $branch from $remote"
+  git fetch --quiet "$remote" "$branch" || { dp_log "skip $source (no remote branch yet)"; continue; }
+
+  work="$(mktemp -d)"
+  # Extract inbox/ from the fetched tip without touching our index or working tree.
+  if ! git archive FETCH_HEAD inbox 2>/dev/null | tar -x -C "$work" 2>/dev/null; then
+    dp_log "skip $source (no inbox on branch)"; rm -rf "$work"; continue
+  fi
+
+  if "$here/verify" --dir "$work" --source "$source"; then
+    mkdir -p "state/$source"
+    cp "$work/inbox/manifest.json" "state/$source/manifest.json"
+    n="$(jq '.entries | length' "state/$source/manifest.json")"
+    printf '%s verified %s blocks (head %s)\n' "$(date -u +%FT%TZ)" "$n" \
+      "$(jq -r '.head.digest' "state/$source/manifest.json")" >> "state/$source/ingested.log"
+    dp_log "ingested $source: $n block(s) verified"
+  else
+    dp_log "REJECTED $source: verification failed (left state untouched)"
+  fi
+  rm -rf "$work"
+done

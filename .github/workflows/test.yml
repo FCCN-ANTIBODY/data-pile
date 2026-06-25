@@ -1,0 +1,20 @@
+name: test
+
+# Exercises the crypto + verification core end to end. Unlike a constrained dev box,
+# ubuntu-latest ships ssh-keygen, so the signature path (sign + verify + wrong-key
+# rejection) runs for real here.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install age
+        run: sudo apt-get update && sudo apt-get install -y age
+      - name: Run the suite
+        run: bash test/run.sh
