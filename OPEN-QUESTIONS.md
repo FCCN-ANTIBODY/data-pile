@@ -30,10 +30,17 @@ judging responsibility).
 - **Open:** whether the pile needs a thin local re-judge helper at all, or whether reading the
   delivered verdicts is enough. Left minimal on purpose — the constitution lives on Tell now.
 
-## 3. Registration idiom unification (`bin/register`)
+## 3. Registration idiom unification (`bin/register`) — canonical lives on Tell
 
-`handshake.yml` (PR → Tell's `_data/piles.yml`) and `bin/need` + `need.yml` (PR → Atlas's
-`_data/needs.yml`) are the same PR-append shape twice. A single `bin/register` parameterized by
-target registry would unify them. Functional today; idiom debt only. Deferred because it
-refactors working PR-opening code that needs `gh` + live repos to exercise safely. Tracked also
-in `tell.anecdote.channel/OPEN-QUESTIONS.md`.
+The constellation registers by PR-as-consent at three tiers, and the **canonical** version now
+lives on the Tell as
+[`bin/register`](https://github.com/FCCN-ANTIBODY/tell.anecdote.channel/blob/main/bin/register)
+(a Tell registering with an Atlas — the cleanest form, which also signs the registrant's
+ownership). This pile carries the two **descendent** forms: `handshake.yml` (PR → Tell's
+`_data/piles.yml`) and `bin/need` + `need.yml` (PR → Atlas's `_data/needs.yml`). They are the
+same PR-append shape, still implemented inline here rather than calling a shared `register`.
+
+- **Blocks:** nothing functional — both flows work; this is idiom debt.
+- **Deferred because:** folding them onto Tell's `{entry|branch|pr}` seam refactors working
+  PR-opening code that needs `gh` + live repos to exercise safely. Tracked also in
+  [`tell.anecdote.channel/OPEN-QUESTIONS.md`](https://github.com/FCCN-ANTIBODY/tell.anecdote.channel/blob/main/OPEN-QUESTIONS.md) #3.
