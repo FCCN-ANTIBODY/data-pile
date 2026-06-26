@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# Own-budget cleanup. A feed/<src> branch is an append-only log; left alone it grows forever.
+# This bounds the LIVE ref while preserving the history: it ARCHIVES a branch's intact chain to
+# archive/feed/<src>@<stamp>, then resets the live ref to a lean snapshot of the current tree.
+# It never rewrites commits in place (signatures stay valid in the archive). A producer (a Tell)
+# simply continues appending from the new lean head on its next delivery.
+#
+# This runs on the data-pile's OWN Actions budget — the pile is self-contained, not a glove.
+#
+# Usage: bin/prune [--keep-days N] [--remote NAME] [--source NAME]
+#   --keep-days  only archive+reset branches whose newest commit is older than N days (default 60)
+#   --remote     remote whose feed/* refs to prune (default: origin)
+#   --source     limit to feed/<source> (default: all feed/*)
+
+here="$(cd "$(dirname "$0")" && pwd)"
+. "$here/lib.sh"
+
+keep_days=60; remote="origin"; only=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --keep-days) keep_days="$2"; shift 2;;
+    --remote) remote="$2"; shift 2;;
+    --source) only="$2"; shift 2;;
+    *) dp_die "unknown arg: $1";;
+  esac
+done
+
+git fetch --quiet "$remote" '+refs/heads/feed/*:refs/remotes/'"$remote"'/feed/*' 2>/dev/null || true
+stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+cutoff="$(date -u -d "-${keep_days} days" +%s 2>/dev/null || date -u -v-"${keep_days}"d +%s)"
+
+for ref in $(git for-each-ref --format='%(refname:short)' "refs/remotes/$remote/feed/*"); do
+  branch="${ref#"$remote"/}"                       # feed/<src>
+  [ -n "$only" ] && [ "feed/$only" != "$branch" ] && continue
+  newest="$(git log -1 --format=%ct "$ref")"
+  if [ "$newest" -gt "$cutoff" ]; then dp_log "skip $branch (fresh)"; continue; fi
+
+  dp_log "prune $branch -> archive/$branch@$stamp"
+  git push "$remote" "$ref:refs/heads/archive/$branch@$stamp"   # preserve the intact chain
+  tree="$(git rev-parse "$ref^{tree}")"
+  new="$(printf 'prune: lean snapshot of %s at %s\n' "$branch" "$stamp" | git commit-tree "$tree")"
+  git push --force "$remote" "$new:refs/heads/$branch"          # reset the live ref lean
+done
+dp_log "prune complete (keep-days=$keep_days)"

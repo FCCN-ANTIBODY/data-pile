@@ -16,6 +16,11 @@ the ideas underneath that a README won't lead with.
   it is wrong.
 - **Replicable by design.** Would the next operator be able to fork this and understand it? Decisions
   pass through that lens.
+- **Owned, not gloved.** A data-pile is *yours* — you fork it, scope it, own its contents, and it
+  runs its own actions on its own budget. It is **not** a constellation "glove" (the submodule
+  engines like Tell/Atlas/Journal that a workspace grafts in for turnkey behavior). If another repo
+  submodules a data-pile, that is a **watched bookmark**, not a way to run it — the pile depends on
+  no engine to function.
 
 ## The shape of the code
 

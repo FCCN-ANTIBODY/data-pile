@@ -10,6 +10,11 @@ to solicit your questions; they deliver responses, each Tell differently encrypt
 **direct QR path** (no Tell server) where a respondent's browser encrypts straight to your pile. A
 pile **never talks to Atlas** — Atlas is, separately, a queue of unmet *needs* that Tells report to.
 
+> **This repo is yours, not a glove.** A data-pile is an *owned* repo: you scope it, own its
+> contents, and it runs its own actions on its own budget. The constellation's submodule engines
+> (Tell, Atlas, Journal) are the "gloves" a *workspace* grafts in for turnkey behavior — a pile
+> needs none of them to function. If someone submodules your pile, that's a watched bookmark.
+
 - **What & why:** [`CONSTITUTION.md`](CONSTITUTION.md) (the law) and [`AGENTS.md`](AGENTS.md) (the why-map).
 - **The interface:** [`CONTRACT.md`](CONTRACT.md) — sources, the crypto model, and the governor.
 
