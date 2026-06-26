@@ -12,6 +12,8 @@ name: ingest
 
 on:
   schedule:
+    # Cadence customization point: the logic lives in bin/ingest; change only this line
+    # (or run on demand via workflow_dispatch) to retune how often the pile pulls.
     - cron: "23 * * * *" # hourly, best-effort
   workflow_dispatch:
 
