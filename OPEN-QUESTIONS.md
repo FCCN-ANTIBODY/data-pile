@@ -29,6 +29,13 @@ judging responsibility).
   decrypted records).
 - **Open:** whether the pile needs a thin local re-judge helper at all, or whether reading the
   delivered verdicts is enough. Left minimal on purpose — the constitution lives on Tell now.
+- **History / where it reconvenes:** this helper *was* built once, as a full pile-side acceptance
+  governor (`bin/accept` + `questions/` guidance + a signed acceptance ledger) in **closed
+  [PR #6](https://github.com/FCCN-ANTIBODY/data-pile/pull/6)** — set aside because as a *default* it
+  re-relocates judging to the pile and re-severs the pile↔Atlas path that shipped. If it returns it
+  returns **electively** (opt-in, the pile choosing to govern its own boundary, paying with its own
+  judge credentials or a timeshare on its Tell) — tracked with the rest of the judge contemplation at
+  [atlas `OPEN-QUESTIONS.md` #5](https://github.com/FCCN-ANTIBODY/atlas.anecdote.channel/blob/main/OPEN-QUESTIONS.md).
 
 ## 3. Registration idiom unification (`bin/register`) — canonical lives on Tell
 
