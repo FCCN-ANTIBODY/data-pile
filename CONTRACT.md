@@ -110,6 +110,23 @@ onto Tell and Tell never pulls. Here Tell *publishes* and the pile *pulls*:
 - **History bounding** reuses Tell's `prune-pile-history.yml` approach: archive the intact signed
   chain to `archive/feed/<source>@<stamp>`, reset the live ref lean, never rewrite signed commits.
 
+## What the pile is — and is not
+
+The pile is a **pure consumer**: an encrypted mailbox plus a reader. It **collects nothing** (no
+Issue intake, no QR, no poll definitions — those live on Tell), it **judges nothing as a round**
+(Tell attaches the delegated verdict before sealing; the owner may re-judge by hand), and it holds
+**no key that seals** — only its *public* `age` recipient (`keys/pile.age.pub`, encrypt-only) and,
+as a repo secret, the *private* identity that **decrypts**. Everything inbound is already ciphertext
+produced by Tell; the pile verifies and stores it. Keep it that way: anything that would have the
+pile ingest, encrypt, or originate data belongs on a Tell, not here.
+
+> **Reserved (not built): Tell-less out-of-band contribution.** Because `keys/pile.age.pub` is
+> public, a contributor *could* encrypt a payload to the pile directly, without any Tell. What is
+> missing is an ingest path for it: today's chain is a one-way ratchet whose seed only Tell holds,
+> so an out-of-band drop would need a separate, non-ratcheted "drop" channel (age-to-recipient,
+> independently anchored). That is a deliberate future second ingest mode — storage and encryption
+> solved out of band, *not* by borrowing Tell's key — and is out of scope here. See OPEN-QUESTIONS.md.
+
 ## The handshake (owner-initiated)
 
 1. **Deploy.** Fork the template (public). `setup.yml` generates the `age` keypair, commits

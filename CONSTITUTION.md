@@ -19,16 +19,15 @@ me. If a thing is not written here, I have not reserved the right to do it.
   when they verify: an unbroken hash chain, a signature from the signer I registered, and ratchet
   commitments that hold. I reject the rest and say so in the failed ingest run. No producer is ever
   granted write into me.
-- I **govern what I keep by my own question-constitution.** Each poll has a constitution I author —
-  its question text and **guidance** (`questions/<source>/<poll>.json`) — and `bin/govern` judges every
-  delivered answer against it: multichoice option-matches mechanically, write-ins and open answers by a
-  judge that is honest when a call needs a human or an agent (`needs-judgment`). I may patch a
-  guidance while a poll runs; every report records which version it judged under. What I authorized to
-  *receive* (a valid token, via Tell) and what I *accept into my data* are two different gates — the
-  second is mine.
-- I **publish a transparency report** for what I govern (`reports/govern-…`), tying each verdict to
-  the guidance in force and to the signed manifest it came from, so anyone can check that what I kept
-  matches the rule I held and the delivery I was signed.
+- I **delegate judging to my Tell, and stay its principal.** I author no judging round and hold no
+  poll definitions. The per-poll constitution that decides what abides lives on the Tell I chose
+  (`constitutions/<pile>/<poll>.json` there); Tell applies it *before* sealing, against the public
+  Issue plaintext, so no key of mine is ever involved. Every record I receive already carries its
+  `governed` verdict and the `constitution_sha` that produced it. I remain free to **re-judge by hand**
+  at my boundary after I decrypt — Tell attaches a verdict, it never decides what I keep.
+- I **read the transparency record my Tell publishes** (`reports/govern-…` on the Tell), which ties
+  each verdict to the rule in force and the Issue that carried it; my own published reports
+  (`reports/…`, via `bin/report`) are aggregation over what verified, not a second judging round.
 - I may **post a need** — a request-for-pile — when a question has no pile to catch it
   (`needs/<id>.json`). An Atlas carries it on its public "what's hanging" list and matches it; I
   **pull** any match (`bin/need-matches`) — Atlas never writes to me. A match is an **invitation**: I

@@ -29,12 +29,13 @@ the ideas underneath that a README won't lead with.
 - **Verification is the gate.** Nothing is trusted until `bin/verify` passes: chain continuity,
   signature against the registered signer, ratchet commitments. Ingest, reports, and proofs all build
   on verified state — never on raw feed contents.
-- **Two gates, not one.** *Authorization* (a valid Tell token) decides what is delivered; *governance*
-  (this pile's `questions/` constitution, applied by `bin/govern`) decides what is kept. They are
-  separate on purpose: Tell authorizes, the pile governs. The constitutional call is the wildcard —
-  so `bin/judge` is a pluggable seam (`DP_JUDGE_CMD`) and is **honest** (`needs-judgment`) rather than
-  faking a verdict; an agent or a human resolves the batch, and every verdict is reported with the
-  guidance version it judged under.
+- **Both gates run at Tell; the pile is the principal.** *Authorization* (a valid token) decides what
+  is delivered; *governance* (the per-poll constitution the pile delegates) decides what abides. Both
+  happen at Tell, before sealing, against the public Issue plaintext — so the pile needs no key and no
+  judging round to receive judged data. Every delivered record carries its `governed` verdict and the
+  `constitution_sha` that produced it. The pile stays the principal: it can trust the delegated verdict
+  or **re-judge by hand** after decrypt. Tell *attaches* a verdict; it never withholds an authorized
+  answer.
 
 ## Working here
 
