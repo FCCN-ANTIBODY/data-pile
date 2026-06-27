@@ -1,7 +1,8 @@
 name: handshake
 
 # A descendent of the constellation's registration paradigm, whose cleanest/canonical form
-# is the Tell's bin/register (a Tell registering with an Atlas). See OPEN-QUESTIONS.md #3.
+# is the Tell's bin/register (a Tell registering with an Atlas). See "B. Registration validation
+# and idiom unification" in civic-node's OPEN-QUESTIONS.md.
 #
 # Owner-initiated registration with Tell. Opens a PR on tell.anecdote.channel adding
 # this pile's entry to _data/piles.yml — the consent signal. The entry tells Tell the

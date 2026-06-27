@@ -125,7 +125,8 @@ pile ingest, encrypt, or originate data belongs on a Tell, not here.
 > missing is an ingest path for it: today's chain is a one-way ratchet whose seed only Tell holds,
 > so an out-of-band drop would need a separate, non-ratcheted "drop" channel (age-to-recipient,
 > independently anchored). That is a deliberate future second ingest mode — storage and encryption
-> solved out of band, *not* by borrowing Tell's key — and is out of scope here. See OPEN-QUESTIONS.md.
+> solved out of band, *not* by borrowing Tell's key — and is out of scope here. See
+> [`OPEN-QUESTIONS.md` → "G. Tell-less pile ingest"](https://github.com/FCCN-ANTIBODY/civic-node/blob/main/OPEN-QUESTIONS.md#g-tell-less-pile-ingest).
 
 ## The handshake (owner-initiated)
 
