@@ -1,4 +1,4 @@
-name: prove
+name: "Federate · prove"
 
 # Owner opt-in: go public from a chosen checkpoint. Derives K_N from the seed and commits
 # the proof bundle to reports/ on main. Publishing it lets anyone decrypt blocks seq>=N and

@@ -1,4 +1,4 @@
-name: report
+name: "Publish · reports"
 
 # Build reports from verified state and publish them to reports/ on main. Aggregation is a
 # documented stub (see bin/report and AGENTS.md) — this publishes the generic summary with
