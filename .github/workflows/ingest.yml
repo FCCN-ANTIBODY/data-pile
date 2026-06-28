@@ -1,4 +1,4 @@
-name: ingest
+name: "Federate · ingest"
 
 # Scheduled PULL: fetch each source's encrypted feed from the Tell gateway URL,
 # verify it (signature against the registered Tell signer + hash-linked chain),

@@ -1,4 +1,4 @@
-name: test
+name: "Test · core"
 
 # Exercises the crypto + verification core end to end. Unlike a constrained dev box,
 # ubuntu-latest ships ssh-keygen, so the signature path (sign + verify + wrong-key

@@ -1,4 +1,4 @@
-name: setup
+name: "Maintain · setup"
 
 # One-time bootstrap. Generates the pile's age keypair, commits ONLY the recipient
 # public key, and stores the private identity as the PILE_AGE_IDENTITY secret. The
