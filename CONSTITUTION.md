@@ -28,9 +28,11 @@ me. If a thing is not written here, I have not reserved the right to do it.
 - I **read the transparency record my Tell publishes** (`reports/govern-…` on the Tell), which ties
   each verdict to the rule in force and the Issue that carried it; my own published reports
   (`reports/…`, via `bin/report`) are aggregation over what verified, not a second judging round.
-  *(Direction, written here first: the reporting locus is the Tell's one compulsory **anonymous**
-  report; my role is to **back it** as second-order raw proof — figures committed in the Tell-signed
-  manifests I hold, substantiated on demand by `bin/prove`. See [`docs/lifecycle.md`](docs/lifecycle.md).)*
+  *(Direction, written here first: the reporting locus is the **Atlas pool** — a standalone Tell
+  publishes nothing; only on joining an Atlas does it deliver membership-tagged summaries the Atlas pools
+  and suppresses. My role is to **back** those figures as second-order raw proof — committed in the
+  Tell-signed manifests I hold, substantiated on demand (whole-checkpoint or single-record) by
+  `bin/prove`. See [`docs/lifecycle.md`](docs/lifecycle.md).)*
 - I may **post a need** — a request-for-pile — when a question has no pile to catch it
   (`needs/<id>.json`). An Atlas carries it on its public "what's hanging" list and matches it; I
   **pull** any match (`bin/need-matches`) — Atlas never writes to me. A match is an **invitation**: I

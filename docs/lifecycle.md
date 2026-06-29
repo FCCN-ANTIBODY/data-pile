@@ -41,21 +41,25 @@ Tell's signature. Being on more than one Tell is a sharing posture, not a differ
 
 ## The pile's role in reporting — backing, not reporting
 
-The reporting locus is the **Tell** (see
-[`tell.anecdote.channel/docs/reporting.md`](https://github.com/FCCN-ANTIBODY/tell.anecdote.channel/blob/main/docs/reporting.md)):
-the Tell publishes one compulsory **anonymous** poll report (`tell.poll.summary/v1` summaries rolled
-into `reports/poll-*.json`). The pile is the **second-order raw proof** that backs those figures:
+The reporting locus is the **Atlas pool**, not the Tell and not the pile (see
+[`tell.anecdote.channel/docs/reporting.md`](https://github.com/FCCN-ANTIBODY/tell.anecdote.channel/blob/main/docs/reporting.md)).
+A standalone Tell publishes no public report; *only when it joins an Atlas* does it deliver de-identified,
+membership-tagged summaries, and the **Atlas pools across Tells and applies small-N suppression** before
+publishing a constituency aggregate. The pile is the **second-order raw proof** that backs those figures:
 
-- **The figures are already committed.** Each Tell summary rides in a **signed manifest head**; the
-  pile holds those manifests verbatim. The report is recomputable from them without decryption.
+- **The figures are already committed.** Each Tell summary (`tell.poll.summary/v1`) rides in a **signed
+  manifest head**; the pile holds those manifests verbatim, so the pool's aggregate is recomputable from
+  them without decryption.
 - **The pile substantiates on demand.** `bin/prove` discloses a checkpoint; a verifier decrypts the
   raw records, confirms they hash to the Tell-signed manifest, and confirms they aggregate to the
-  published summary. The anonymous report is falsifiable against the raw **without the raw ever being
-  public**.
+  published figure — falsifiable against the raw **without the raw ever being public**.
+- **Single-record disclosure is the per-row form of the same proof.** The sealed govern log is an
+  **evidence locker**: one record disclosed on a justified query (the identity tie is the Issue author),
+  never a bulk dump.
 - **`bin/report` is owner-side aggregation over *verified* state, not a second judging round**
-  ([`CONSTITUTION.md`](../CONSTITUTION.md)). It already carries the manifest digest + signature flag as
-  provenance ([`bin/report`](../bin/report)); reading the Tell's `reports/poll-*` as the public-facing
-  abstraction it backs is the natural next definition of its aggregation.
+  ([`CONSTITUTION.md`](../CONSTITUTION.md)); it already carries the manifest digest + signature flag as
+  provenance ([`bin/report`](../bin/report)).
 
-So: **per-record answers and `asker` stay sealed in the pile**; the Tell's report abstracts them; the
-pile can prove them. The pile is the system of record; the Tell is the first abstraction.
+So: **per-record answers and `asker` stay sealed in the pile**; the Atlas pool abstracts the membership-
+tagged summaries; the pile can prove any figure. The pile is the system of record; the Atlas pool is the
+first public abstraction; the Tell only delivers into an Atlas it has joined.
