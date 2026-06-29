@@ -168,5 +168,6 @@ the above and fails closed; a failed `ingest.yml` run is the alarm.
    signer, and ratchet commitments.
 2. **Ingest** verified blocks into owner-side state (`bin/ingest`).
 3. **Decrypt** when you want to read (`bin/decrypt`, needs `PILE_AGE_IDENTITY`).
-4. **Report** from verified state (`bin/report` — aggregation is yours to define).
+4. **Report** from verified state (`bin/report` — aggregation is yours to define; its role as the
+   *backing* behind the Atlas-pooled report is sketched in [`docs/lifecycle.md`](docs/lifecycle.md)).
 5. **Prove** if and when you take it public (`bin/prove` — publish a ratchet checkpoint).

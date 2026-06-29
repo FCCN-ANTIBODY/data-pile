@@ -39,6 +39,16 @@ purpose, because the project hasn't chosen an aggregation model.
   [PR #6](https://github.com/FCCN-ANTIBODY/data-pile/pull/6)) precisely because, as a *default*, it
   re-relocates judging to the pile and re-severs the pile↔Atlas path that shipped. If it returns, it
   returns electively.
+- **Reporting: the pile backs, the Atlas pools.** The reporting locus is the **Atlas pool**, not the
+  pile and not a standalone Tell — a Tell publishes nothing until it joins an Atlas, which pools
+  membership-tagged summaries across many Tells and suppresses small-N before publishing. The pile's job
+  is to **back those figures in verifiable fact** as second-order raw proof: per-record answers stay
+  sealed here, the figures are already committed in the Tell-signed manifests this pile holds, and
+  `bin/prove` substantiates any figure on demand (whole-checkpoint, or single-record for the sealed
+  govern log's evidence-locker disclosure). `bin/report` graduates from a generic stub toward
+  *aggregation over verified state* — never a second judging round.
+  See [`docs/lifecycle.md`](docs/lifecycle.md) and
+  [`tell.anecdote.channel/docs/reporting.md`](https://github.com/FCCN-ANTIBODY/tell.anecdote.channel/blob/main/docs/reporting.md).
 
 ## What this means for today's code
 
