@@ -120,12 +120,15 @@ as a repo secret, the *private* identity that **decrypts**. Everything inbound i
 produced by Tell; the pile verifies and stores it. Keep it that way: anything that would have the
 pile ingest, encrypt, or originate data belongs on a Tell, not here.
 
-> **Reserved (not built): Tell-less out-of-band contribution.** Because `keys/pile.age.pub` is
-> public, a contributor *could* encrypt a payload to the pile directly, without any Tell. What is
-> missing is an ingest path for it: today's chain is a one-way ratchet whose seed only Tell holds,
-> so an out-of-band drop would need a separate, non-ratcheted "drop" channel (age-to-recipient,
-> independently anchored). That is a deliberate future second ingest mode — storage and encryption
-> solved out of band, *not* by borrowing Tell's key — and is out of scope here. See
+> **Second channel (specified, not yet built): Tell-less out-of-band contribution.** This document
+> governs **channel 1** — the inbound Tell ratchet feed. Because `keys/pile.age.pub` is public, a
+> contributor *could* encrypt a payload to the pile directly, without any Tell. What is missing is an
+> ingest path for it: today's chain is a one-way ratchet whose seed only Tell holds, so an
+> out-of-band drop needs a separate, non-ratcheted **`feed/drop`** channel (age-to-recipient,
+> independently anchored, signed in its own namespace). That deliberate second ingest mode — plus the
+> sendable whole-pile bundle and the archive-and-reset *clear-space* gesture — is now specified in
+> [`docs/transfer.md`](docs/transfer.md); it solves storage and encryption out of band, *not* by
+> borrowing Tell's key. Tracked as
 > [`OPEN-QUESTIONS.md` → "G. Tell-less pile ingest"](https://github.com/FCCN-ANTIBODY/civic-node/blob/main/OPEN-QUESTIONS.md#g-tell-less-pile-ingest).
 
 ## The handshake (owner-initiated)
