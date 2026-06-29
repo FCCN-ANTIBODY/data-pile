@@ -28,7 +28,10 @@ purpose, because the project hasn't chosen an aggregation model.
   today, because the live feed is a ratchet only the Tell can extend. The direction is a separate
   `feed/drop` channel: `age`-to-recipient blocks under their own signed, hash-linked manifest (no
   ratchet, since there is no shared seed), for archival imports and direct owner-to-owner handoff —
-  storage *and* encryption solved out of band, never by borrowing the Tell's key.
+  storage *and* encryption solved out of band, never by borrowing the Tell's key. **Now specified**
+  in [`docs/transfer.md`](docs/transfer.md), together with the sendable whole-pile **bundle** (a pile
+  relocates between origins as one self-verifying artifact) and the archive-and-reset **clear-space**
+  ingress — the build surface is named there; the code is the next step.
 - **Elective self-governance, opt-in only.** The owner may already **re-judge by hand** after
   `bin/decrypt`. A pile that wants its boundary governed systematically can summon the judge itself —
   paying with its own credentials or a timeshare on its Tell — and only ever as an **optional** action.
