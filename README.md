@@ -12,6 +12,9 @@ and only you can read what it holds — until you choose to prove it to everyone
 - **Where it's going:** [`ROADMAP.md`](ROADMAP.md). What's deferred for the whole constellation lives
   in one place, the workspace's
   [`OPEN-QUESTIONS.md`](https://github.com/FCCN-ANTIBODY/civic-node/blob/main/OPEN-QUESTIONS.md).
+- **The whole poll lifecycle, step by step** — where this template fits, from copying it through the
+  owner decoding the answers:
+  [`civic-node/docs/PIPELINE.md`](https://github.com/FCCN-ANTIBODY/civic-node/blob/main/docs/PIPELINE.md).
 
 ## How it works, in one breath
 
