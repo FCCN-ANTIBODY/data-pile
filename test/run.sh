@@ -92,4 +92,36 @@ printf '%s' "$out" | grep -q "re-issue a QR" || fail "missing consent-invite wor
 printf '%s' "$out" | grep -q "THEIRMATCH" && fail "leaked another repo's match" || true
 ok "pull shows our match (consent invite); others' hidden"
 
+echo "[9] bin/pile-new: the pure half (plan/fill) — postures, attestation, custody refusals"
+RECIP="age1586sf5fgqv0cxt2xgyyl4p2s6f7x4eaneg28rhkpaj4sm8e5x92qtqwy8l"
+pn="$work/pilenew"; mkdir -p "$pn"; cp pile.yml "$pn/"
+# Mobile fill: only the recipient crosses; pile.yml + keys/pile.age.pub land; attestation stamped.
+bin/pile-new fill --dir "$pn" --id cd04-q1 --scope colorado --recipient "$RECIP" \
+  --owner acme --name tank --provisioner "acme/host" \
+  --source-url "https://tell.anecdote.channel/piles/cd04-q1/feed/" 2>/dev/null
+grep -q '^id: "cd04-q1"' "$pn/pile.yml" || fail "pile-new fill did not set id"
+grep -q '^age_recipient: "age1586' "$pn/pile.yml" || fail "pile-new fill did not set the recipient"
+grep -q '^repo_url: "https://github.com/acme/tank"' "$pn/pile.yml" || fail "pile-new fill did not set repo_url"
+grep -q '^    url: "https://tell' "$pn/pile.yml" || fail "pile-new fill did not set sources[0].url"
+grep -q '^provisioner: "acme/host"' "$pn/pile.yml" || fail "pile-new fill did not stamp the attestation"
+[ "$(cat "$pn/keys/pile.age.pub")" = "$RECIP" ] || fail "keys/pile.age.pub is not the supplied recipient"
+# Idempotent: a second fill does not double-stamp.
+bin/pile-new fill --dir "$pn" --id cd04-q1 --scope colorado --recipient "$RECIP" --provisioner "acme/host" 2>/dev/null
+[ "$(grep -c '^provisioner:' "$pn/pile.yml")" = 1 ] || fail "attestation double-stamped on re-fill"
+# Computer fill: keygen mints locally, recipient lands, identity never in the checkout.
+pk="$work/pilenew-kg"; mkdir -p "$pk"; cp pile.yml "$pk/"
+bin/pile-new fill --dir "$pk" --id fc-q2 --scope colorado --keygen 2>/dev/null
+grep -q '^age_recipient: "age1' "$pk/pile.yml" || fail "keygen fill did not set a recipient"
+grep -rq 'AGE-SECRET-KEY' "$pk" && fail "keygen fill leaked an identity into the checkout" || true
+# Custody refusals: no posture; both postures; provisioner+keygen (the rule); bad recipient; bad id.
+bin/pile-new plan --id a --scope s 2>/dev/null && fail "accepted no identity posture" || true
+bin/pile-new plan --id a --scope s --keygen --recipient "$RECIP" 2>/dev/null && fail "accepted both postures" || true
+bin/pile-new plan --id a --scope s --keygen --provisioner x/y 2>/dev/null && fail "a provisioner was allowed to keygen" || true
+bin/pile-new plan --id a --scope s --recipient age1nope 2>/dev/null && fail "accepted a malformed recipient" || true
+bin/pile-new plan --id UPPER --scope s --recipient "$RECIP" 2>/dev/null && fail "accepted a non-slug id" || true
+# The plan narrates the posture (the operator sees the custody before anything happens).
+bin/pile-new plan --id a --scope s --recipient "$RECIP" 2>/dev/null | grep -q "no identity exists host-side" \
+  || fail "plan did not narrate the Mobile custody"
+ok "pile-new: fill fills, attestation stamps once, provisioner-never-keygens enforced, malformed refused"
+
 echo "ALL TESTS PASSED"
