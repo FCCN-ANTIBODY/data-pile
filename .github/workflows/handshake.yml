@@ -38,12 +38,17 @@ jobs:
           id="$(awk '$1=="id:"{gsub(/[\"]/,"",$2);print $2}' pile.yml)"
           scope="$(awk '$1=="scope:"{gsub(/[\"]/,"",$2);print $2}' pile.yml)"
           recip="$(cat keys/pile.age.pub)"
+          prov="$(awk '$1=="provisioner:"{gsub(/[\"]/,"",$2);print $2}' pile.yml)"
+          provspec="$(awk '$1=="provisioner_spec:"{gsub(/[\"]/,"",$2);print $2}' pile.yml)"
           {
             echo "- id: ${id}"
             echo "  scope: ${scope}"
             echo "  feed: feed/${scope}/${id}"
             echo "  age_recipient: \"${recip}\""
             echo "  repo_url: https://github.com/${GITHUB_REPOSITORY}"
+            # the provisioner attestation travels with the entry (CONTRACT.md → spec-or-attested)
+            if [ -n "${prov}" ]; then echo "  provisioner: \"${prov}\""; fi
+            if [ -n "${provspec}" ]; then echo "  provisioner_spec: \"${provspec}\""; fi
           } | tee entry.yml
       - name: Open registration PR on Tell (or print to paste)
         env:

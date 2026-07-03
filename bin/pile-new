@@ -111,16 +111,18 @@ fill() {
   if [ -n "$provisioner" ] && ! grep -q '^provisioner:' "$dir/pile.yml"; then
     cat >> "$dir/pile.yml" <<EOF
 
-# ATTESTATION (rework slice 6, minimal form): this pile was stood up by a provisioner, not
-# hand-built by its owner. Anything talking to a managed pile can read who managed it.
-# The provisioner held the CREATE credential only — never the age identity.
+# ATTESTATION (CONTRACT.md -> "The provisioner attestation", spec-or-attested): this pile was
+# stood up by a provisioner, not hand-built by its owner. Anything talking to a managed pile can
+# read who managed it and what they speak. The provisioner held the CREATE credential only --
+# never the age identity.
 provisioner: "$provisioner"
+provisioner_spec: "data-pile/pile-new/v1"
 EOF
   fi
   dp_log "filled $dir (id=$id scope=$scope recipient=${recip:0:12}...)"
 }
 
-entry() { # the handshake entry, same shape handshake.yml assembles
+entry() { # the handshake entry, same shape handshake.yml assembles (attestation travels with it)
   local recip; recip="$(cat "$dir/keys/pile.age.pub" 2>/dev/null || printf '%s' "$recipient")"
   cat <<EOF
   - id: $id
@@ -129,6 +131,9 @@ entry() { # the handshake entry, same shape handshake.yml assembles
     age_recipient: "$recip"
     repo_url: "https://github.com/$repo_slug"
 EOF
+  if [ -n "$provisioner" ]; then
+    printf '    provisioner: "%s"\n    provisioner_spec: "data-pile/pile-new/v1"\n' "$provisioner"
+  fi
 }
 
 create() {

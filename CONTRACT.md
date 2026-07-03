@@ -147,6 +147,26 @@ pile ingest, encrypt, or originate data belongs on a Tell, not here.
    `feed/<scope>/<id>` branch and serves it at `/piles/<id>/feed/*`. This pile's `ingest.yml` pulls,
    verifies, and persists into its own feed branch. Tell never touches this repo.
 
+## The provisioner attestation (spec-or-attested)
+
+A pile stood up **by someone other than its owner** says so, in its own metadata — so that a
+managed pile is distinguishable from a hand-built one **by anything that talks to it**, and it is
+not *possible* to manage piles invisibly. Two optional `pile.yml` fields carry it:
+
+```yaml
+provisioner: "owner/repo"                   # WHO stood this pile up (absent = self-service)
+provisioner_spec: "data-pile/pile-new/v1"   # WHAT they speak — this spec's id, or homebrew:<id>
+```
+
+- **Our tooling always stamps both** (`bin/pile-new --provisioner`, and therefore `provision.yml`).
+- **A homebrew manager attests** `provisioner_spec: "homebrew:<its-name>"` — the rule is
+  spec-or-attested, never silent. `bin/ingest` prints a notice (never a hard failure — the pile
+  still works) when `provisioner` is present without a `provisioner_spec`.
+- **The attestation travels**: the handshake entry (and `bin/pile-new`'s printed entry) carries
+  both fields when present, so the Tell's `_data/piles.yml` — the registry anything consults —
+  shows which of its piles are managed, and by what. The provisioner held the *create* credential
+  only; the custody rule stands (it never touched the identity — see `keys/custody.yml`).
+
 ## What the pile requires of Tell
 
 The pile depends only on this. How Tell stages digests internally (e.g. batching) is Tell's
