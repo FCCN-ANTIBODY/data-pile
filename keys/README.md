@@ -5,6 +5,19 @@
 | `pile.age.pub` | yes (public) | This pile's `age` recipient. `setup.yml` generates it; only the encrypt-only public half is committed. The private identity lives solely in the `PILE_AGE_IDENTITY` secret. |
 | `tell.signers` | yes (public) | Tell's delivery-signer **public** key, as an SSH allowed-signers line. `bin/verify` checks every pulled delivery against it. **You add this by hand.** |
 
+## Minting without a VPS (the browser alternative)
+
+`setup.yml` runs `age-keygen` on a CI runner and stores the private identity as a repo secret — the
+**Computer** posture. The **Mobile** posture needs neither the runner nor the secret: mint the
+keypair on the device with
+[`anecdote.channel/composer/age-mint.mjs`](https://github.com/FCCN-ANTIBODY/anecdote.channel/blob/main/composer/age-mint.mjs)
+(platform WebCrypto; verified byte-interoperable with the real `age` tool), commit **only the
+recipient** here as `pile.age.pub` and into `pile.yml` `age_recipient`, and hold the identity where
+you are — the trove, gesture-gated. `PILE_AGE_IDENTITY` then never exists as a repo secret at all:
+decrypt (`bin/decrypt`) is an owner-side act wherever the identity lives, and a hosted provisioner
+(civic-node `OPEN-QUESTIONS.md` §P, rework slice 3) can stand up the whole pile without ever
+touching the private half.
+
 ## Registering Tell's signer (the entire inbound trust handoff)
 
 There is no GitHub App. Tell signs each digest manifest with an ordinary SSH key;

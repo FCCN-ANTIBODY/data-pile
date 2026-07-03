@@ -7,6 +7,10 @@ name: "Maintain · setup"
 # Requires a token that can write repo secrets (Actions secrets API). The default
 # GITHUB_TOKEN cannot; provide a fine-grained PAT as the SETUP_TOKEN secret with
 # "Secrets: read and write" + "Contents: read and write" on this repo.
+#
+# The workflow-less alternative (no SETUP_TOKEN, no VPS, no key ever leaving the
+# device): mint the keypair in the browser with anecdote.channel's composer/age-mint.mjs
+# and commit only the recipient by hand — see keys/README.md "Minting without a VPS".
 
 on:
   workflow_dispatch:
