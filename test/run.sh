@@ -104,10 +104,12 @@ grep -q '^age_recipient: "age1586' "$pn/pile.yml" || fail "pile-new fill did not
 grep -q '^repo_url: "https://github.com/acme/tank"' "$pn/pile.yml" || fail "pile-new fill did not set repo_url"
 grep -q '^    url: "https://tell' "$pn/pile.yml" || fail "pile-new fill did not set sources[0].url"
 grep -q '^provisioner: "acme/host"' "$pn/pile.yml" || fail "pile-new fill did not stamp the attestation"
+grep -q '^provisioner_spec: "data-pile/pile-new/v1"' "$pn/pile.yml" || fail "pile-new fill did not stamp WHAT the manager speaks (spec-or-attested)"
 [ "$(cat "$pn/keys/pile.age.pub")" = "$RECIP" ] || fail "keys/pile.age.pub is not the supplied recipient"
 # Idempotent: a second fill does not double-stamp.
 bin/pile-new fill --dir "$pn" --id cd04-q1 --scope colorado --recipient "$RECIP" --provisioner "acme/host" 2>/dev/null
 [ "$(grep -c '^provisioner:' "$pn/pile.yml")" = 1 ] || fail "attestation double-stamped on re-fill"
+[ "$(grep -c '^provisioner_spec:' "$pn/pile.yml")" = 1 ] || fail "spec attestation double-stamped on re-fill"
 # Computer fill: keygen mints locally, recipient lands, identity never in the checkout.
 pk="$work/pilenew-kg"; mkdir -p "$pk"; cp pile.yml "$pk/"
 bin/pile-new fill --dir "$pk" --id fc-q2 --scope colorado --keygen 2>/dev/null

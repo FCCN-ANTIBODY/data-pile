@@ -30,6 +30,12 @@ stage="${DP_STAGE_DIR:-$repo/.ingest}"
 sources="$(awk '$1=="-" && $2=="name:" {print $3}' pile.yml)"
 [ -n "$sources" ] || dp_die "no sources in pile.yml"
 
+# Spec-or-attested (CONTRACT.md -> "The provisioner attestation"): a managed pile names what its
+# manager speaks. A notice, never a failure -- the pile works either way; the silence is the smell.
+if grep -q '^provisioner:' pile.yml && ! grep -q '^provisioner_spec:' pile.yml; then
+  dp_log "NOTICE: pile.yml names a provisioner but no provisioner_spec -- a manager attests what it speaks (spec id, or homebrew:<id>); ask yours to stamp it"
+fi
+
 # Fetch one file from the gateway base URL into a destination path. Fails closed.
 dp_fetch() { # BASEURL RELPATH DEST
   local base="${1%/}" rel="$2" dest="$3"
