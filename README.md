@@ -45,13 +45,21 @@ Tell ──(age-encrypt + sign + hash-link)──▶ /piles/<id>/feed/*  (Tell's
 4. From then on, Tell publishes your encrypted feed at `/piles/<id>/feed/*`. The **`ingest`**
    workflow pulls, verifies, and folds it into your own `feed/tell` branch on a cadence.
 
-A pile today is **self-service only** — the template, the `setup` workflow (with its hand-minted
-`SETUP_TOKEN`), the handshake, the hand-pinned signer. Hosted or rented provisioning — someone
-standing a pile up *for* you — does not exist yet; it is the gate on the whole GitHub-side rework,
-tracked at civic-node
-[`OPEN-QUESTIONS.md` §P](https://github.com/FCCN-ANTIBODY/civic-node/blob/main/OPEN-QUESTIONS.md) and
+**Or in one gesture:** `bin/pile-new` collapses steps 1–3 — it creates the repo from this template,
+fills `pile.yml` + `keys/pile.age.pub`, and prints the handshake entry. Two postures: `--recipient age1…`
+(**Mobile**: mint the identity on your device with
+[anecdote's `age-mint.mjs`](https://github.com/FCCN-ANTIBODY/anecdote.channel/blob/main/composer/age-mint.mjs);
+no identity exists host-side, no `SETUP_TOKEN`, no secret at all) or `--keygen` (**Computer**:
+local `age-keygen`, identity stored as the new repo's secret, never printed). Needs `PILE_NEW_TOKEN` —
+a credential that can create repos under `--owner`, held by whoever runs the gesture.
+
+**Rented:** the `provision` workflow runs the same gesture *for* someone — they hand over only a
+device-minted recipient (there is deliberately no keygen input, and `bin/pile-new` hard-refuses
+`--keygen` with `--provisioner`), and the pile is stamped `provisioner:` so a managed pile says so
+(the attestation, minimal form). The rework this opens is civic-node
+[`OPEN-QUESTIONS.md` §P](https://github.com/FCCN-ANTIBODY/civic-node/blob/main/OPEN-QUESTIONS.md),
 shaped in [`docs/TENANCY.md`](https://github.com/FCCN-ANTIBODY/civic-node/blob/main/docs/TENANCY.md).
-A third party that manages piles must speak this repo's spec — or have its homebrew **attested in the
+A third party that manages piles speaks this repo's spec — or has its homebrew **attested in the
 pile's metadata** when anything talks to it.
 
 ## Local toolbox (`bin/`)

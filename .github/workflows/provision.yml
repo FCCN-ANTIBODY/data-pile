@@ -1,0 +1,67 @@
+name: "Maintain · provision"
+
+# Stand up a data-pile FOR SOMEONE ELSE — the rented interaction model (civic-node
+# OPEN-QUESTIONS §P "the gate"; docs/TENANCY.md; rework slice 3b, civic-node#59).
+#
+# The custody rules this workflow makes structural:
+#   - The owner mints their age identity ON THEIR OWN DEVICE (anecdote composer/age-mint.mjs)
+#     and hands over ONLY the recipient. There is no keygen input here on purpose —
+#     bin/pile-new hard-refuses --keygen with --provisioner — so this host CANNOT hold,
+#     or even briefly touch, what opens the tank.
+#   - The pile is stamped `provisioner: <this repo>` (the slice-6 attestation, minimal
+#     form), so anything talking to a managed pile can see it was managed, and by whom.
+#   - PILE_NEW_TOKEN is the CREATE credential (repo creation under the target owner).
+#     It is this provisioner's secret, capture-install-validate provisioned by hand —
+#     never the pile's, never the Tell's, never in a QR.
+#
+# After the run: the new pile's owner dispatches ITS handshake workflow (or pastes the
+# printed entry onto the Tell) and pins the Tell signer by hand — consent stays a gesture.
+
+on:
+  workflow_dispatch:
+    inputs:
+      owner:
+        description: "Account/org the new pile repo is created under"
+        required: true
+      id:
+        description: "Pile id (lowercase slug, e.g. cd04-q1)"
+        required: true
+      scope:
+        description: "Scope (e.g. colorado)"
+        required: true
+      recipient:
+        description: "The owner's age recipient (age1…) — minted on THEIR device, never here"
+        required: true
+      name:
+        description: "New repo name (default: the id)"
+        required: false
+      source_url:
+        description: "Tell gateway base URL the pile will pull from (optional)"
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  provision:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install gh
+        run: command -v gh >/dev/null || (sudo apt-get update && sudo apt-get install -y gh)
+      - name: Stand up the pile (Mobile posture only — no identity host-side)
+        env:
+          PILE_NEW_TOKEN: ${{ secrets.PILE_NEW_TOKEN }}
+          IN_OWNER: ${{ inputs.owner }}
+          IN_ID: ${{ inputs.id }}
+          IN_SCOPE: ${{ inputs.scope }}
+          IN_RECIPIENT: ${{ inputs.recipient }}
+          IN_NAME: ${{ inputs.name }}
+          IN_SOURCE_URL: ${{ inputs.source_url }}
+        run: |
+          [ -n "$PILE_NEW_TOKEN" ] || { echo "set the PILE_NEW_TOKEN secret (repo-create credential)"; exit 1; }
+          set -- create --owner "$IN_OWNER" --id "$IN_ID" --scope "$IN_SCOPE" \
+                 --recipient "$IN_RECIPIENT" --provisioner "$GITHUB_REPOSITORY"
+          [ -n "$IN_NAME" ] && set -- "$@" --name "$IN_NAME"
+          [ -n "$IN_SOURCE_URL" ] && set -- "$@" --source-url "$IN_SOURCE_URL"
+          bin/pile-new "$@"

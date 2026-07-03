@@ -1,0 +1,170 @@
+#!/usr/bin/env bash
+# Stand up a NEW data-pile — the missing automation between "Use this template" and a
+# registered tank (civic-node OPEN-QUESTIONS §P "rented data-pile provisioning — the gate";
+# rework slice 3, civic-node#59). One gesture replaces four manual acts: create the repo from
+# the template, fill pile.yml + keys/pile.age.pub, (optionally) mint the Computer-posture
+# identity, and print the handshake entry.
+#
+#   bin/pile-new plan   --id ID --scope SCOPE (--recipient age1… | --keygen) [opts]
+#   bin/pile-new fill   --dir PATH  (same args; offline — writes pile.yml + keys/ in a checkout)
+#   bin/pile-new create --owner OWNER (same args; network — template-generate, fill, push)
+#
+# Options:
+#   --id / --scope        the pile's identity (pile.yml)
+#   --recipient age1…     the MOBILE posture: an age recipient minted on the operator's device
+#                         (anecdote composer/age-mint.mjs). No identity exists host-side, ever.
+#   --keygen              the COMPUTER posture: age-keygen here, identity stored as the new
+#                         repo's PILE_AGE_IDENTITY secret (never printed), local file shredded.
+#   --owner OWNER         account/org the new repo is created under (create)
+#   --name NAME           new repo name (default: the id)
+#   --template OWNER/NAME template repo (default: FCCN-ANTIBODY/data-pile)
+#   --source-url URL      the Tell gateway base this pile will pull from (pile.yml sources[0].url)
+#   --signer SHA256:…     the Tell's delivery-signer fingerprint, if already confirmed IRL
+#   --provisioner REPO    ATTESTATION: who stood this pile up, when it wasn't the owner
+#                         (rework slice 6's grammar, minimal form). INCOMPATIBLE with --keygen:
+#                         a provisioner never holds — or even briefly touches — the identity.
+#   --private             create the repo private (public is the posture default)
+#
+# Env: PILE_NEW_TOKEN (or GH_TOKEN) — the CREATE credential: it must be able to create repos
+# under --owner and (for --keygen only) write the new repo's secrets. Held by whoever runs
+# `create` — the operator, or a provisioner running provision.yml — never by the pile's Tell
+# and never in a QR. The custody line: the token creates the TANK; only the owner ever holds
+# what OPENS it.
+set -euo pipefail
+here="$(cd "$(dirname "$0")" && pwd)"
+. "$here/lib.sh"
+
+cmd="${1:-}"; shift || true
+id=""; scope=""; recipient=""; keygen=0; owner=""; name=""; dir=""
+template="FCCN-ANTIBODY/data-pile"; source_url=""; signer=""; provisioner=""; private=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --id) id="$2"; shift 2;;
+    --scope) scope="$2"; shift 2;;
+    --recipient) recipient="$2"; shift 2;;
+    --keygen) keygen=1; shift;;
+    --owner) owner="$2"; shift 2;;
+    --name) name="$2"; shift 2;;
+    --dir) dir="$2"; shift 2;;
+    --template) template="$2"; shift 2;;
+    --source-url) source_url="$2"; shift 2;;
+    --signer) signer="$2"; shift 2;;
+    --provisioner) provisioner="$2"; shift 2;;
+    --private) private=1; shift;;
+    *) dp_die "pile-new: unknown arg: $1";;
+  esac
+done
+
+case "$cmd" in plan|fill|create) ;; *) dp_die "usage: bin/pile-new plan|fill|create (see header)";; esac
+[ -n "$id" ] && [ -n "$scope" ] || dp_die "pile-new: --id and --scope are required"
+printf '%s' "$id" | grep -Eq '^[a-z0-9][a-z0-9-]*$' || dp_die "pile-new: --id must be a lowercase slug"
+[ -n "$name" ] || name="$id"
+
+# Exactly one identity posture — and the custody rule, enforced: a provisioner never keygens.
+if [ "$keygen" = 1 ] && [ -n "$recipient" ]; then dp_die "pile-new: --keygen and --recipient are exclusive"; fi
+if [ "$keygen" = 0 ] && [ -z "$recipient" ]; then dp_die "pile-new: choose --recipient (Mobile: mint on-device, age-mint.mjs) or --keygen (Computer)"; fi
+if [ -n "$provisioner" ] && [ "$keygen" = 1 ]; then
+  dp_die "pile-new: a provisioner never touches an identity — mint on the OWNER's device (age-mint.mjs) and pass --recipient"
+fi
+if [ -n "$recipient" ]; then
+  printf '%s' "$recipient" | grep -Eq '^age1[ac-hj-np-z02-9]{58}$' \
+    || dp_die "pile-new: --recipient is not an age recipient (age1…, 62 chars, bech32)"
+fi
+
+repo_slug="${owner:+$owner/}$name"
+
+plan() {
+  cat <<EOF
+pile-new plan
+  repo        ${repo_slug:-<owner>/$name}  (from template $template$( [ "$private" = 1 ] && printf ', private'))
+  pile.yml    id=$id scope=$scope${source_url:+ sources[0].url=$source_url}${signer:+ sources[0].signer=$signer}
+  identity    $( [ "$keygen" = 1 ] \
+      && printf 'COMPUTER: age-keygen on this machine -> new repo secret PILE_AGE_IDENTITY (never printed)' \
+      || printf 'MOBILE: recipient supplied (%s...) — no identity exists host-side' "${recipient:0:12}")
+  attestation $( [ -n "$provisioner" ] && printf 'provisioner: %s (stamped into pile.yml)' "$provisioner" || printf 'none (self-service)')
+  next        dispatch the new repo's handshake workflow (or paste the printed entry onto the Tell)
+EOF
+}
+
+# Fill a data-pile checkout in --dir: pile.yml values, keys/pile.age.pub, the attestation stamp.
+# Offline and idempotent — the pure half `create` calls after the clone, and tests call directly.
+fill() {
+  [ -n "$dir" ] || dp_die "pile-new fill: --dir is required"
+  [ -f "$dir/pile.yml" ] || dp_die "pile-new fill: $dir has no pile.yml (not a data-pile checkout?)"
+  local recip="$recipient"
+  if [ "$keygen" = 1 ]; then
+    command -v age-keygen >/dev/null 2>&1 || dp_die "pile-new: --keygen needs age-keygen (or use --recipient)"
+    idfile="$(mktemp -d)/identity.txt"
+    age-keygen -o "$idfile" 2>/dev/null || dp_die "pile-new: age-keygen failed"
+    recip="$(age-keygen -y "$idfile")"
+    # The identity leaves this function ONLY as the path exported for create's secret-install.
+    PILE_NEW_IDENTITY_FILE="$idfile"
+  fi
+  sed -i "s|^id: .*|id: \"$id\"|" "$dir/pile.yml"
+  sed -i "s|^scope: .*|scope: \"$scope\"|" "$dir/pile.yml"
+  sed -i "s|^age_recipient: .*|age_recipient: \"$recip\"|" "$dir/pile.yml"
+  [ -n "$repo_slug" ] && [ -n "$owner" ] && sed -i "s|^repo_url: .*|repo_url: \"https://github.com/$repo_slug\"|" "$dir/pile.yml"
+  [ -n "$source_url" ] && sed -i "0,/^    url: .*/s||    url: \"$source_url\"|" "$dir/pile.yml"
+  [ -n "$signer" ] && sed -i "0,/^    signer: .*/s||    signer: \"$signer\"|" "$dir/pile.yml"
+  mkdir -p "$dir/keys"
+  printf '%s\n' "$recip" > "$dir/keys/pile.age.pub"
+  if [ -n "$provisioner" ] && ! grep -q '^provisioner:' "$dir/pile.yml"; then
+    cat >> "$dir/pile.yml" <<EOF
+
+# ATTESTATION (rework slice 6, minimal form): this pile was stood up by a provisioner, not
+# hand-built by its owner. Anything talking to a managed pile can read who managed it.
+# The provisioner held the CREATE credential only — never the age identity.
+provisioner: "$provisioner"
+EOF
+  fi
+  dp_log "filled $dir (id=$id scope=$scope recipient=${recip:0:12}...)"
+}
+
+entry() { # the handshake entry, same shape handshake.yml assembles
+  local recip; recip="$(cat "$dir/keys/pile.age.pub" 2>/dev/null || printf '%s' "$recipient")"
+  cat <<EOF
+  - id: $id
+    scope: "$scope"
+    feed: feed/$scope/$id
+    age_recipient: "$recip"
+    repo_url: "https://github.com/$repo_slug"
+EOF
+}
+
+create() {
+  [ -n "$owner" ] || dp_die "pile-new create: --owner is required"
+  command -v gh >/dev/null 2>&1 || dp_die "pile-new create: needs gh"
+  export GH_TOKEN="${PILE_NEW_TOKEN:-${GH_TOKEN:-}}"
+  [ -n "$GH_TOKEN" ] || dp_die "pile-new create: set PILE_NEW_TOKEN (or GH_TOKEN) — a credential that can create repos under $owner"
+  plan
+  dp_log "creating $repo_slug from $template"
+  gh api "repos/$template/generate" -f owner="$owner" -f name="$name" \
+    -F private=$( [ "$private" = 1 ] && printf 'true' || printf 'false') >/dev/null
+  work="$(mktemp -d)"; trap 'rm -rf "$work"' EXIT
+  for i in 1 2 3 4 5; do  # template generation is async; clone when it lands
+    git clone -q "https://x-access-token:${GH_TOKEN}@github.com/$repo_slug" "$work/pile" 2>/dev/null && break
+    [ "$i" = 5 ] && dp_die "pile-new: new repo never became cloneable"; sleep $((i * 2))
+  done
+  dir="$work/pile"; fill
+  if [ "$keygen" = 1 ]; then
+    printf '%s' "$(cat "$PILE_NEW_IDENTITY_FILE")" | gh secret set PILE_AGE_IDENTITY --repo "$repo_slug"
+    shred -u "$PILE_NEW_IDENTITY_FILE" 2>/dev/null || rm -f "$PILE_NEW_IDENTITY_FILE"
+    dp_log "identity stored as $repo_slug secret PILE_AGE_IDENTITY (never printed)"
+  fi
+  git -C "$work/pile" add pile.yml keys/pile.age.pub
+  git -C "$work/pile" -c user.name="pile-new" -c user.email="pile-new@users.noreply.github.com" \
+    commit -q -m "pile-new: fill identity (id=$id scope=$scope)${provisioner:+ [provisioned by $provisioner]}"
+  git -C "$work/pile" push -q origin HEAD
+  dp_log "pushed $repo_slug"
+  echo
+  echo "REGISTER (the consent gesture stays a gesture): dispatch the new repo's 'handshake'"
+  echo "workflow, or open a PR appending this entry to the Tell's _data/piles.yml —"
+  entry
+  echo "then pin the Tell's signer by hand and confirm it out-of-band (keys/README.md)."
+}
+
+case "$cmd" in
+  plan) plan;;
+  fill) fill;;
+  create) create;;
+esac
