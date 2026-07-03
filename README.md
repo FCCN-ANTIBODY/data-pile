@@ -45,6 +45,15 @@ Tell ──(age-encrypt + sign + hash-link)──▶ /piles/<id>/feed/*  (Tell's
 4. From then on, Tell publishes your encrypted feed at `/piles/<id>/feed/*`. The **`ingest`**
    workflow pulls, verifies, and folds it into your own `feed/tell` branch on a cadence.
 
+A pile today is **self-service only** — the template, the `setup` workflow (with its hand-minted
+`SETUP_TOKEN`), the handshake, the hand-pinned signer. Hosted or rented provisioning — someone
+standing a pile up *for* you — does not exist yet; it is the gate on the whole GitHub-side rework,
+tracked at civic-node
+[`OPEN-QUESTIONS.md` §P](https://github.com/FCCN-ANTIBODY/civic-node/blob/main/OPEN-QUESTIONS.md) and
+shaped in [`docs/TENANCY.md`](https://github.com/FCCN-ANTIBODY/civic-node/blob/main/docs/TENANCY.md).
+A third party that manages piles must speak this repo's spec — or have its homebrew **attested in the
+pile's metadata** when anything talks to it.
+
 ## Local toolbox (`bin/`)
 
 | Command | Who | What |
