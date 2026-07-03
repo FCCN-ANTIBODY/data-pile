@@ -125,3 +125,9 @@ bin/pile-new plan --id a --scope s --recipient "$RECIP" 2>/dev/null | grep -q "n
 ok "pile-new: fill fills, attestation stamps once, provisioner-never-keygens enforced, malformed refused"
 
 echo "ALL TESTS PASSED"
+
+echo "[10] custody: the declared boundary holds (keys/custody.yml x bin/check-custody)"
+bin/check-custody >/dev/null 2>&1 || fail "check-custody failed on the repo as-is"
+mkdir -p "$work/badwf"; printf 'env:\n  X: ${{ secrets.SNEAKY }}\n' > "$work/badwf/x.yml"
+WORKFLOWS_DIR="$work/badwf" bin/check-custody >/dev/null 2>&1 && fail "checker passed an undeclared secret-read" || true
+ok "workflows read only declared secrets; an undeclared read fails the build"

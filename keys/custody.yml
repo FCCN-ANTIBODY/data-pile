@@ -1,0 +1,32 @@
+# DECLARED, BOUNDED CUSTODY (rework slice 5, civic-node#61; the posture is civic-node
+# docs/TENANCY.md → "The collapse"). Every secret a workflow in this repo may read is declared
+# here; every ssh signing namespace is declared here. bin/check-custody enforces both in CI —
+# an undeclared secret-read or namespace fails the build. The human canon is keys/README.md;
+# this file is its machine-checkable edge.
+
+secrets:
+  - name: PILE_AGE_IDENTITY
+    kind: the tank's age identity (the ONLY key that reads what this pile holds)
+    minter: "computer: setup.yml runner · mobile: the owner's device (age-mint.mjs) — then this secret never exists"
+    holder: "owner only — repo secret (computer) or the trove, gesture-gated (mobile); NEVER a provisioner"
+  - name: SETUP_TOKEN
+    kind: bootstrap PAT (secrets+contents write on this repo; GITHUB_TOKEN cannot write secrets)
+    minter: the owner, by hand (a PAT cannot be minted by a script)
+    holder: "repo secret, read only by setup.yml; unnecessary on the mobile path"
+  - name: TELL_PR_TOKEN
+    kind: consent transport (contents+PR write on the Tell being joined — the Tell's grant)
+    minter: the owner, by hand
+    holder: "repo secret, read only by handshake.yml; else the entry is pasted by hand"
+  - name: PILE_NEW_TOKEN
+    kind: the CREATE credential (repo creation under the target owner; rework slice 3)
+    minter: whoever runs the pile-new gesture — the operator, or a provisioner
+    holder: "the provisioner's repo secret, read only by provision.yml; never the pile's Tell, never in a QR"
+  - name: ATLAS_PR_TOKEN
+    kind: consent transport (write on the Atlas a need registers with — the Atlas's grant)
+    minter: the Atlas operator (or self, when self-listed)
+    holder: "repo secret, read only by the need-registration workflow"
+
+namespaces:
+  - name: data-pile
+    key: the Tell's delivery signer (pinned in keys/tell.signers; NOT held here)
+    used-by: bin/verify (manifest head verification — verify-only; this repo signs nothing)
