@@ -39,7 +39,7 @@ Tell ──(age-encrypt + sign + hash-link)──▶ /piles/<id>/feed/*  (Tell's
    `keys/pile.age.pub`, stores the private identity as the repo secret `PILE_AGE_IDENTITY`, and
    fills in `pile.yml`.
 3. Run the **`handshake`** workflow. It opens a registration PR on Tell with your `age_recipient`
-   and feed branch — no write access to your repo is requested. Then pin Tell's published signer
+   and pickup location — no write access to your repo is requested. Then pin Tell's published signer
    key into `keys/tell.signers` + `pile.yml` by hand (confirm the fingerprint out-of-band — see
    `keys/README.md`).
 4. From then on, Tell publishes your encrypted feed at `/piles/<id>/feed/*`. The **`ingest`**

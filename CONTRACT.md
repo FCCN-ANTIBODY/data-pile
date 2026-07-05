@@ -93,9 +93,9 @@ The ratchet that encrypts blocks also governs disclosure. The manifest stores on
 Tell **never reaches into this repo** — the exact mirror of the outbound rule, where a pile places
 onto Tell and Tell never pulls. Here Tell *publishes* and the pile *pulls*:
 
-- **Tell side.** Tell produces each pile's chain on a `feed/<scope>/<id>` branch in its **own**
-  repo (parallel to the outbound `pile/<scope>/<id>`) and serves it on its own domain at
-  `/piles/<id>/feed/*` via the gateway Worker. Per digest Tell appends `inbox/<seq>.enc`
+- **Tell side.** Tell produces each pile's chain at `piles/<id>/feed/*` in its **own** repo's
+  served tree (disk path == URL path) and serves it on its own domain as plain static files —
+  no gateway worker, no feed branches. Per digest Tell appends `inbox/<seq>.enc`
   (symmetric-encrypted under `K_seq`; at genesis also `inbox/seed.age`, the `age`-wrapped ratchet
   seed for the owner), updates and **re-signs** `inbox/manifest.json`. The encrypted payload is safe
   to serve openly.
@@ -136,8 +136,8 @@ pile ingest, encrypt, or originate data belongs on a Tell, not here.
 1. **Deploy.** Fork the template (public). `setup.yml` generates the `age` keypair, commits
    `keys/pile.age.pub`, stores `PILE_AGE_IDENTITY` as a repo secret, and fills `pile.yml`.
 2. **Owner → PR on Tell.** `handshake.yml` opens a registration PR adding the pile's entry to
-   `tell.anecdote.channel/_data/piles.yml` (id, scope, the `feed/<scope>/<id>` branch, the pile's
-   `age_recipient`, the repo URL). This PR is the consent signal — and all it grants Tell is *where
+   `tell.anecdote.channel/_data/piles.yml` (id, scope, the pile's `age_recipient`, the repo URL;
+   Tell serves the chain at `piles/<id>/feed/*`, derived from the id). This PR is the consent signal — and all it grants Tell is *where
    to wrap digests for* this pile. It does **not** grant Tell any write access.
 3. **Pin Tell's signer (by hand).** Copy Tell's published `keys/tell.signers` into this pile's
    `keys/tell.signers` and its `keys/tell.fpr` value into `pile.yml` `signer`. **Confirm the
