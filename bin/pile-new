@@ -130,7 +130,6 @@ entry() { # the handshake entry, same shape handshake.yml assembles (attestation
   cat <<EOF
   - id: $id
     scope: "$scope"
-    feed: feed/$scope/$id
     age_recipient: "$recip"
     repo_url: "https://github.com/$repo_slug"
 EOF

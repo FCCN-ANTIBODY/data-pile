@@ -7,8 +7,8 @@ name: "Federate · handshake"
 # Owner-initiated registration with Tell. Opens a PR on tell.anecdote.channel adding
 # this pile's entry to _data/piles.yml — the consent signal. The entry tells Tell the
 # pile's age_recipient (so it can wrap each digest's ratchet seed for the owner) and the
-# feed branch it will publish to. When Tell accepts, it begins publishing the encrypted
-# feed at /piles/<id>/feed/* on its OWN domain; this pile PULLS it via ingest.yml.
+# chain location. When Tell accepts, it begins publishing the encrypted feed at
+# /piles/<id>/feed/* in its OWN served tree (plain static files); this pile PULLS it via ingest.yml.
 #
 # There is NO GitHub App and NO write grant to Tell. Trust runs the other way: the pile
 # pins Tell's published delivery-signer fingerprint (tell.anecdote.channel/keys/tell.fpr)
@@ -43,7 +43,6 @@ jobs:
           {
             echo "- id: ${id}"
             echo "  scope: ${scope}"
-            echo "  feed: feed/${scope}/${id}"
             echo "  age_recipient: \"${recip}\""
             echo "  repo_url: https://github.com/${GITHUB_REPOSITORY}"
             # the provisioner attestation travels with the entry (CONTRACT.md → spec-or-attested)
