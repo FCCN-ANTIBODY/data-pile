@@ -121,6 +121,8 @@ bin/pile-new plan --id a --scope s --keygen --recipient "$RECIP" 2>/dev/null && 
 bin/pile-new plan --id a --scope s --keygen --provisioner x/y 2>/dev/null && fail "a provisioner was allowed to keygen" || true
 bin/pile-new plan --id a --scope s --recipient age1nope 2>/dev/null && fail "accepted a malformed recipient" || true
 bin/pile-new plan --id UPPER --scope s --recipient "$RECIP" 2>/dev/null && fail "accepted a non-slug id" || true
+bin/pile-new plan --id "$(printf 'x%.0s' $(seq 64))" --scope s --recipient "$RECIP" 2>/dev/null \
+  && fail "accepted an id too long for a DNS label (the Floor alias rule)" || true
 # The plan narrates the posture (the operator sees the custody before anything happens).
 bin/pile-new plan --id a --scope s --recipient "$RECIP" 2>/dev/null | grep -q "no identity exists host-side" \
   || fail "plan did not narrate the Mobile custody"
