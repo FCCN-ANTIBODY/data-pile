@@ -58,6 +58,9 @@ done
 case "$cmd" in plan|fill|create) ;; *) dp_die "usage: bin/pile-new plan|fill|create (see header)";; esac
 [ -n "$id" ] && [ -n "$scope" ] || dp_die "pile-new: --id and --scope are required"
 printf '%s' "$id" | grep -Eq '^[a-z0-9][a-z0-9-]*$' || dp_die "pile-new: --id must be a lowercase slug"
+# The id doubles as a hostname label (the Floor alias rule: <id>.tell.anecdote.channel
+# stages this pile — anecdote.channel#93), so it must fit a DNS label.
+[ "${#id}" -le 63 ] || dp_die "pile-new: --id must fit a DNS label (63 chars max) — it doubles as the pile's Floor hostname"
 [ -n "$name" ] || name="$id"
 
 # Exactly one identity posture — and the custody rule, enforced: a provisioner never keygens.
