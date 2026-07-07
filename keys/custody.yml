@@ -30,3 +30,6 @@ namespaces:
   - name: data-pile
     key: the Tell's delivery signer (pinned in keys/tell.signers; NOT held here)
     used-by: bin/verify (manifest head verification — verify-only; this repo signs nothing)
+  - name: data-pile-drop
+    key: each drop SENDER's own signer (pinned in keys/drop.signers; NOT held here — bin/drop-pack signs only with a caller-supplied --sign key, e.g. an Atlas's, never a secret of this repo)
+    used-by: bin/verify --source drop (verify) · bin/drop-pack (sign, sender-side; docs/transfer.md §B)

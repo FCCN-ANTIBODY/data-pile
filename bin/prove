@@ -11,6 +11,11 @@
 #       PUBLIC: given a published proof bundle and a (key-less) checkout, derive forward
 #       from the checkpoint, decrypt blocks, and verify each against the signed manifest.
 #
+# DROP feeds (docs/transfer.md §B "Disclosure parity"): blocks are independent, so the owner
+# mode reveals each block's own Kb for seq>=N as `block_keys` instead of a ratchet checkpoint.
+# Revealing one block's key derives nothing about any other — strictly MORE isolated than the
+# ratchet's forward-only disclosure. The check mode handles either bundle shape.
+#
 # Owner mode needs the identity (PILE_AGE_IDENTITY / DP_IDENTITY_FILE); check mode needs nothing.
 
 here="$(cd "$(dirname "$0")" && pwd)"
@@ -32,6 +37,22 @@ inbox="$dir/inbox"; manifest="$inbox/manifest.json"
 if [ -n "$check" ]; then
   [ -f "$check" ] || dp_die "no proof bundle at $check"
   cp_from="$(jq -r '.from_seq' "$check")"
+  if [ "$(jq 'has("block_keys")' "$check")" = "true" ]; then
+    # drop-feed bundle: independent per-block keys, each checked against its own commitment.
+    n=0
+    for s in $(jq -r '.block_keys | keys_unsorted[]' "$check" | sort -n); do
+      kb="$(jq -r --arg s "$s" '.block_keys[$s]' "$check")"
+      want="$(jq -r ".entries[$s].ratchet_pub" "$manifest")"
+      got="sha256:$(dp_ratchet_pub "$kb")"
+      [ "$want" = "$got" ] || dp_die "revealed key fails at seq $s (commitment mismatch)"
+      block="$(jq -r ".entries[$s].block" "$manifest")"
+      dp_dec "$kb" "$inbox/$block" "-" >/dev/null || dp_die "decrypt failed at seq $s"
+      n=$((n+1))
+    done
+    dp_log "OK: proof verifies $n drop block(s) against the signed manifest"
+    echo "proven"
+    exit 0
+  fi
   kk="$(jq -r '.checkpoint_key' "$check")"
   n="$(jq '.entries | length' "$manifest")"
   s="$cp_from"
@@ -50,13 +71,37 @@ if [ -n "$check" ]; then
 fi
 
 [ -n "$from" ] || dp_die "specify --from N or --check FILE"
-[ -f "$inbox/seed.age" ] || dp_die "no seed.age in $inbox"
 idfile=""
 if [ -n "${DP_IDENTITY_FILE:-}" ]; then idfile="$DP_IDENTITY_FILE"
 elif [ -n "${PILE_AGE_IDENTITY:-}" ]; then idfile="$(mktemp)"; trap 'rm -f "$idfile"' EXIT
   printf '%s\n' "$PILE_AGE_IDENTITY" > "$idfile"
 else dp_die "no identity (set PILE_AGE_IDENTITY or DP_IDENTITY_FILE)"; fi
 
+# Drop feed (entries carry `key` files): reveal each block's own Kb for seq>=from.
+if [ "$(jq --argjson f "$from" '.entries[$f].key // empty | length > 0' "$manifest")" = "true" ]; then
+  n="$(jq '.entries | length' "$manifest")"
+  keysjson="{}"
+  s="$from"
+  while [ "$s" -lt "$n" ]; do
+    kf="$(jq -r ".entries[$s].key // empty" "$manifest")"
+    [ -n "$kf" ] || dp_die "mixed feed: entry $s has no key file"
+    kb="$(age -d -i "$idfile" "$inbox/$kf")" || dp_die "could not unwrap $kf (wrong identity?)"
+    keysjson="$(jq -c --arg s "$s" --arg k "$kb" '. + {($s): $k}' <<<"$keysjson")"
+    s=$((s+1))
+  done
+  mkdir -p "$dir/reports"
+  bundle="$dir/reports/proof-$source-from-$from.json"
+  jq -n --arg src "$source" --argjson from "$from" --argjson keys "$keysjson" \
+        --arg dg "$(jq -r '.head.digest' "$manifest")" '
+    { source:$src, from_seq:$from, block_keys:$keys, manifest_digest:$dg,
+      note:"Publish this to prove the named drop blocks. Anyone: bin/prove --check this-file. Blocks are independent; unnamed blocks stay sealed." }' \
+    > "$bundle"
+  dp_log "wrote $bundle (publishing it discloses blocks $from.. ; each key opens ONLY its own block)"
+  echo "$bundle"
+  exit 0
+fi
+
+[ -f "$inbox/seed.age" ] || dp_die "no seed.age in $inbox"
 k="$(age -d -i "$idfile" "$inbox/seed.age")"
 i=0; while [ "$i" -lt "$from" ]; do k="$(dp_ratchet_next "$k")"; i=$((i+1)); done
 

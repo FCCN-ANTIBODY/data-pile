@@ -128,9 +128,73 @@ bin/pile-new plan --id a --scope s --recipient "$RECIP" 2>/dev/null | grep -q "n
   || fail "plan did not narrate the Mobile custody"
 ok "pile-new: fill fills, attestation stamps once, provisioner-never-keygens enforced, malformed refused"
 
+# ── the drop channel (channel 2, docs/transfer.md §B) ─────────────────────────
+dropkey=""; dsigners="$work/drop.signers"
+if [ -n "$signkey" ]; then
+  ssh-keygen -t ed25519 -N '' -C drop -f "$work/dropsign" >/dev/null
+  printf 'drop %s\n' "$(cat "$work/dropsign.pub")" > "$dsigners"
+  dropkey="$work/dropsign"
+fi
+dvfy() { DP_ALLOW_UNSIGNED="${allow_unsigned:-0}" bin/verify --dir "$1" --source drop --signers "$dsigners"; }
+
+echo "[10] drop-pack: arbitrary artifacts ride as opaque blocks, chain verifies"
+printf '{"schema":"anecdote.ballot/v1","pile":"cd04-q1","poll":"budget","answer":"Keep","ts":"2026-07-04T18:00:00Z","sig":{"alg":"ed25519"}}\n' > "$work/a.json"
+head -c 1024 /dev/urandom > "$work/b.bin"   # payload-agnostic: a raw binary blob
+bin/drop-pack --dir "$work/dpile" --recipient "$recip" ${dropkey:+--sign "$dropkey"} "$work/a.json" "$work/b.bin" >/dev/null
+dvfy "$work/dpile" >"$work/dv.out" 2>&1 || { cat "$work/dv.out"; fail "verify rejected a valid drop chain"; }
+[ -f "$work/dpile/inbox/000000.kage" ] && [ -f "$work/dpile/inbox/000001.kage" ] || fail "per-block kage files missing"
+[ -f "$work/dpile/inbox/seed.age" ] && fail "a drop feed grew a seed" || true
+ok "two artifacts packed; per-block keys wrapped; chain verifies as source 'drop'"
+
+echo "[11] drop append chains onto the existing head"
+printf 'later artifact\n' > "$work/c.txt"
+bin/drop-pack --dir "$work/dpile" --recipient "$recip" ${dropkey:+--sign "$dropkey"} "$work/c.txt" >/dev/null
+[ "$(jq '.entries|length' "$work/dpile/inbox/manifest.json")" = 3 ] || fail "append did not extend the chain"
+[ "$(jq -r '.entries[2].prev_hash' "$work/dpile/inbox/manifest.json")" = "$(jq -r '.entries[1].this_hash' "$work/dpile/inbox/manifest.json")" ] \
+  || fail "appended entry does not chain"
+dvfy "$work/dpile" >/dev/null 2>&1 || fail "verify rejected the extended drop chain"
+ok "append preserves prev_hash continuity; chain still verifies"
+
+echo "[12] owner decrypts drop blocks byte-for-byte (no seed involved)"
+DP_IDENTITY_FILE="$work/id.txt" bin/decrypt --dir "$work/dpile" --all --out "$work/dplain" >/dev/null \
+  || fail "owner decrypt of drop feed failed"
+cmp -s "$work/a.json" "$work/dplain/0.txt" || fail "artifact 0 did not round-trip"
+cmp -s "$work/b.bin" "$work/dplain/1.txt" || fail "binary artifact did not round-trip"
+cmp -s "$work/c.txt" "$work/dplain/2.txt" || fail "appended artifact did not round-trip"
+ok "opaque payloads round-trip exactly; per-block commitment cross-checked"
+
+echo "[13] tampered block and tampered key both fail closed"
+printf 'x' >> "$work/dpile/inbox/000001.enc"
+dvfy "$work/dpile" >/dev/null 2>&1 && fail "verify accepted a tampered drop block" || true
+rm -rf "$work/dpile"; bin/drop-pack --dir "$work/dpile" --recipient "$recip" ${dropkey:+--sign "$dropkey"} "$work/a.json" "$work/b.bin" >/dev/null
+mv "$work/dpile/inbox/000001.kage" "$work/dpile/inbox/000001.kage.bak"
+printf '%s' "wrong" | age -r "$recip" -o "$work/dpile/inbox/000001.kage"
+DP_IDENTITY_FILE="$work/id.txt" bin/decrypt --dir "$work/dpile" --seq 1 >/dev/null 2>&1 \
+  && fail "decrypt accepted a key that fails its commitment" || true
+mv "$work/dpile/inbox/000001.kage.bak" "$work/dpile/inbox/000001.kage"
+ok "tampered ciphertext rejected at verify; substituted key rejected at the commitment"
+
+if [ -n "$dropkey" ]; then
+  echo "[13b] namespace separation: a drop head never replays as a Tell delivery"
+  # Same key, principal renamed to 'tell' — ONLY the namespace differs, and that must be enough.
+  printf 'tell %s\n' "$(cat "$work/dropsign.pub")" > "$work/cross.signers"
+  bin/verify --dir "$work/dpile" --source tell --signers "$work/cross.signers" >/dev/null 2>&1 \
+    && fail "a data-pile-drop signature verified under the data-pile namespace" || true
+  ok "cross-channel replay refused (data-pile vs data-pile-drop)"
+fi
+
+echo "[14] drop disclosure: reveal per-block keys, key-less party verifies; unnamed blocks stay sealed"
+DP_IDENTITY_FILE="$work/id.txt" bin/prove --dir "$work/dpile" --source drop --from 1 >/dev/null
+dbundle="$work/dpile/reports/proof-drop-from-1.json"
+jq -e '.block_keys | has("1")' "$dbundle" >/dev/null || fail "drop proof bundle carries no block_keys"
+jq -e '.block_keys | has("0") | not' "$dbundle" >/dev/null || fail "drop proof leaked an earlier block's key"
+cp -r "$work/dpile" "$work/dpub"; rm -f "$work/dpub/inbox/"*.kage   # key-less checkout
+bin/prove --dir "$work/dpub" --check "$dbundle" >/dev/null || fail "public drop proof did not verify"
+ok "block_keys bundle proves named blocks only; each key opens only its own block"
+
 echo "ALL TESTS PASSED"
 
-echo "[10] custody: the declared boundary holds (keys/custody.yml x bin/check-custody)"
+echo "[15] custody: the declared boundary holds (keys/custody.yml x bin/check-custody)"
 bin/check-custody >/dev/null 2>&1 || fail "check-custody failed on the repo as-is"
 mkdir -p "$work/badwf"; printf 'env:\n  X: ${{ secrets.SNEAKY }}\n' > "$work/badwf/x.yml"
 WORKFLOWS_DIR="$work/badwf" bin/check-custody >/dev/null 2>&1 && fail "checker passed an undeclared secret-read" || true
