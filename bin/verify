@@ -5,7 +5,9 @@
 #
 # Usage: bin/verify [--dir DIR] [--source NAME]
 #   --dir     directory holding inbox/ (default: repo root .)
-#   --source  feed source name (default: tell)
+#   --source  feed source name (default: tell). `drop` selects channel 2 (docs/transfer.md §B):
+#             trust root keys/drop.signers, signature namespace `data-pile-drop`, and a
+#             per-entry age-wrapped key file — its own verifier, not a relaxed one.
 #
 # Trust env (be explicit, fail closed):
 #   DP_ALLOW_UNSIGNED=1   skip the signature check (only when ssh-keygen or the signers
@@ -44,11 +46,14 @@ elif [ ! -f "$signers" ]; then
 else
   sig="$(jq -r '.head.sig // empty' "$manifest")"
   [ -n "$sig" ] || dp_die "manifest head carries no signature"
+  # The drop channel signs under its own namespace, so a head from one channel can never
+  # replay into the other (docs/transfer.md §B).
+  ns="data-pile"; [ "$source" = "drop" ] && ns="data-pile-drop"
   tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
   printf '%s' "$sig" | base64 -d > "$tmp/sig"
-  printf '%s' "$digest" | ssh-keygen -Y verify -n data-pile -I "$source" \
+  printf '%s' "$digest" | ssh-keygen -Y verify -n "$ns" -I "$source" \
     -f "$signers" -s "$tmp/sig" >/dev/null \
-    || dp_die "signature does NOT verify against $signers"
+    || dp_die "signature does NOT verify against $signers (namespace $ns)"
   # Cross-check the signer fingerprint matches what pile.yml registered.
   want="$(dp_source_signer "$source" "$repo/pile.yml")"
   if [ -n "$want" ]; then
@@ -75,6 +80,12 @@ while [ "$i" -lt "$n" ]; do
   got="sha256:$(dp_sha256_file "$inbox/$block")"
   [ "$got" = "$this" ] || dp_die "block $block tampered at seq $seq ($got != $this)"
   printf '%s' "$rp" | grep -Eq '^sha256:[0-9a-f]{64}$' || dp_die "bad ratchet_pub at seq $seq"
+  if [ "$source" = "drop" ]; then
+    # Channel 2: every entry names its age-wrapped per-block key; the file must be present.
+    kf="$(jq -r ".entries[$i].key // empty" "$manifest")"
+    [ -n "$kf" ] || dp_die "drop entry $seq carries no key file (channel 2 requires one)"
+    [ -f "$inbox/$kf" ] || dp_die "missing key file $kf at seq $seq"
+  fi
 
   prev="$this"
   i=$((i+1))

@@ -1,0 +1,96 @@
+#!/usr/bin/env bash
+# Pack arbitrary artifacts into the DROP channel — the sender half of channel 2
+# (docs/transfer.md §B; civic-node OPEN-QUESTIONS §G "Tell-less pile ingest"). Takes whole,
+# self-contained artifacts (a hand-carried ballot envelope, any opaque blob) and extends a
+# drop-channel inbox: each block encrypted under its own RANDOM per-block key Kb, Kb age-wrapped
+# to the pile's committed recipient as inbox/<seq>.kage, the whole chain committed by a signed,
+# hash-linked manifest. No shared seed, no ratchet — blocks are independent.
+#
+# The payload is OPAQUE by design: the pile never inspects plaintext, so a fully packaged
+# transit envelope rides as-is. The envelope discipline (encrypt-to-recipient + commitment +
+# signed chain) is what's enforced — a new channel is a source, not a relaxed verifier.
+#
+#   bin/drop-pack --dir DIR (--recipient age1… | reads DIR/keys/pile.age.pub) [--sign KEY] FILE...
+#
+#   --dir        directory holding (or receiving) inbox/ — a pile checkout or a feed staging tree
+#   --recipient  the pile's age recipient; defaults to DIR/keys/pile.age.pub, then repo keys/
+#   --sign KEY   ssh private key; signs the manifest head under namespace `data-pile-drop`
+#                (distinct from `data-pile`, so a drop head can never replay as a Tell feed).
+#                Omitted => head.sig=null (dev only; bin/verify then needs DP_ALLOW_UNSIGNED=1).
+#
+# Appending: if DIR/inbox/manifest.json already exists (source "drop"), new blocks chain onto
+# its head (prev_hash continuity) and the head is re-signed over the whole entries array.
+set -euo pipefail
+here="$(cd "$(dirname "$0")" && pwd)"
+. "$here/lib.sh"
+repo="$(cd "$here/.." && pwd)"
+
+dir=""; recipient=""; signkey=""
+files=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --dir) dir="$2"; shift 2;;
+    --recipient) recipient="$2"; shift 2;;
+    --sign) signkey="$2"; shift 2;;
+    -*) dp_die "drop-pack: unknown arg: $1";;
+    *) files+=("$1"); shift;;
+  esac
+done
+[ -n "$dir" ] || dp_die "drop-pack: --dir is required"
+[ "${#files[@]}" -gt 0 ] || dp_die "drop-pack: no artifact files given"
+for f in "${files[@]}"; do [ -f "$f" ] || dp_die "drop-pack: no such file: $f"; done
+
+# Resolve the recipient: explicit flag, the target dir's committed public key, then the repo's.
+if [ -z "$recipient" ]; then
+  for cand in "$dir/keys/pile.age.pub" "$repo/keys/pile.age.pub"; do
+    [ -f "$cand" ] && { recipient="$(cat "$cand")"; break; }
+  done
+fi
+[ -n "$recipient" ] || dp_die "drop-pack: no recipient (--recipient, or commit keys/pile.age.pub)"
+printf '%s' "$recipient" | grep -Eq '^age1[ac-hj-np-z02-9]{58}$' \
+  || dp_die "drop-pack: recipient is not an age recipient (age1…)"
+command -v age >/dev/null 2>&1 || dp_die "drop-pack: needs age"
+
+inbox="$dir/inbox"; mkdir -p "$inbox"
+manifest="$inbox/manifest.json"
+
+# Chain onto an existing drop manifest, or start at genesis.
+entries="[]"; prev="null"; next=0
+if [ -f "$manifest" ]; then
+  src="$(jq -r '.source // empty' "$manifest")"
+  [ "$src" = "drop" ] || dp_die "drop-pack: $manifest is source '$src', not 'drop' (one source per branch)"
+  entries="$(jq -c '.entries' "$manifest")"
+  next="$(jq '.entries | length' "$manifest")"
+  if [ "$next" -gt 0 ]; then prev="\"$(jq -r ".entries[$((next-1))].this_hash" "$manifest")\""; fi
+fi
+
+for f in "${files[@]}"; do
+  seqp="$(printf '%06d' "$next")"
+  kb="$(openssl rand -hex 32)"                     # the per-block key: random, never derived
+  dp_enc "$kb" "$f" "$inbox/$seqp.enc"
+  printf '%s' "$kb" | age -r "$recipient" -o "$inbox/$seqp.kage"
+  this="sha256:$(dp_sha256_file "$inbox/$seqp.enc")"
+  rpub="sha256:$(dp_ratchet_pub "$kb")"            # same commitment shape; commits to THIS block only
+  entries="$(printf '%s' "$entries" | jq \
+    --argjson seq "$next" --arg ca "$(date -u +%FT%TZ)" \
+    --arg block "$seqp.enc" --arg key "$seqp.kage" --arg th "$this" --argjson ph "$prev" --arg rp "$rpub" \
+    '. + [{seq:$seq, created_at:$ca, source:"drop", block:$block, key:$key, this_hash:$th, prev_hash:$ph, ratchet_pub:$rp}]')"
+  prev="\"$this\""
+  next=$((next+1))
+done
+
+# Head: digest over canonical entries; signed under the DROP namespace, never data-pile's.
+tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
+printf '%s' "$entries" | jq -cS '.' > "$tmp/entries"
+digest="$(tr -d '\n' < "$tmp/entries" | sha256sum | cut -d' ' -f1)"
+sig="null"
+if [ -n "$signkey" ]; then
+  command -v ssh-keygen >/dev/null 2>&1 || dp_die "drop-pack: --sign needs ssh-keygen"
+  printf '%s' "$digest" | ssh-keygen -Y sign -n data-pile-drop -f "$signkey" 2>/dev/null > "$tmp/sig" \
+    || dp_die "drop-pack: signing failed"
+  sig="$(base64 -w0 < "$tmp/sig" | jq -R '.')"
+fi
+jq -n --argjson entries "$entries" --argjson seq "$((next-1))" --arg dg "$digest" --argjson sig "$sig" \
+  '{ version:1, source:"drop", entries:$entries, head:{seq:$seq, digest:$dg, sig:$sig} }' > "$manifest"
+
+dp_log "packed ${#files[@]} artifact(s) into $inbox (drop chain now $next block(s), digest $digest, signed=$([ "$sig" = null ] && echo no || echo yes))"

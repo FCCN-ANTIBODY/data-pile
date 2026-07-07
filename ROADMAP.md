@@ -24,14 +24,18 @@ purpose, because the project hasn't chosen an aggregation model.
 ## Where it's going
 
 - **A second, Tell-less ingest channel.** `keys/pile.age.pub` is public and encrypt-only, so anyone
-  *could* seal a payload to the pile without a Tell — but there is no path to **ingest** such a drop
-  today, because the live feed is a ratchet only the Tell can extend. The direction is a separate
+  *could* seal a payload to the pile without a Tell — the live feed alone couldn't ingest such a
+  drop, because it is a ratchet only the Tell can extend. The answer is a separate
   `feed/drop` channel: `age`-to-recipient blocks under their own signed, hash-linked manifest (no
   ratchet, since there is no shared seed), for archival imports and direct owner-to-owner handoff —
-  storage *and* encryption solved out of band, never by borrowing the Tell's key. **Now specified**
+  storage *and* encryption solved out of band, never by borrowing the Tell's key. Specified
   in [`docs/transfer.md`](docs/transfer.md), together with the sendable whole-pile **bundle** (a pile
   relocates between origins as one self-verifying artifact) and the archive-and-reset **clear-space**
-  ingress — the build surface is named there; the code is the next step.
+  ingress. **The channel core is now built**: `bin/drop-pack` (the sender half — whole,
+  self-contained artifacts, one random `age`-wrapped key per block), `bin/verify --source drop`
+  (namespace `data-pile-drop`, trust root `keys/drop.signers` — its own verifier, not a relaxed
+  one), `bin/decrypt` (per-block unwrap, no seed), `bin/prove` (per-block `block_keys` disclosure).
+  The bundle export (`bin/send`) and the clear-space workflow remain the named next step.
 - **Elective self-governance, opt-in only.** The owner may already **re-judge by hand** after
   `bin/decrypt`. A pile that wants its boundary governed systematically can summon the judge itself —
   paying with its own credentials or a timeshare on its Tell — and only ever as an **optional** action.

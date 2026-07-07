@@ -4,6 +4,7 @@
 | --- | --- | --- |
 | `pile.age.pub` | yes (public) | This pile's `age` recipient. `setup.yml` generates it; only the encrypt-only public half is committed. The private identity lives solely in the `PILE_AGE_IDENTITY` secret. |
 | `tell.signers` | yes (public) | Tell's delivery-signer **public** key, as an SSH allowed-signers line. `bin/verify` checks every pulled delivery against it. **You add this by hand.** |
+| `drop.signers` | yes (public) | Accepted senders for the **drop channel** (channel 2, [`docs/transfer.md`](../docs/transfer.md) §B) — SSH allowed-signers lines with principal `drop`. `bin/verify --source drop` checks a drop manifest's head against it under the distinct namespace `data-pile-drop`, so a drop head can never replay as a Tell delivery. **You add each sender by hand** — the same pin-and-confirm-out-of-band handoff as `tell.signers`; a head signed by an unknown key is a *later trust decision*, never trusted by default. |
 
 ## Minting without a VPS (the browser alternative)
 

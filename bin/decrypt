@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
-# Owner-only: unwrap the age-encrypted ratchet seed, derive ratchet keys, and decrypt
-# blocks. Requires the private age identity (never committed).
+# Owner-only: decrypt blocks. Requires the private age identity (never committed).
+# Two key paths, kept independent (docs/transfer.md; ROADMAP "two decryption paths"):
+#   channel 1 (tell) — unwrap the age-encrypted ratchet seed, derive K_seq forward;
+#   channel 2 (drop) — an entry naming a `key` file has its own age-wrapped per-block
+#                      key Kb (inbox/<seq>.kage); unwrap it directly, no seed involved.
+# Either way the derived/unwrapped key must match the entry's published commitment.
 #
 # Usage: bin/decrypt [--dir DIR] [--source NAME] (--seq N | --all) [--out DIR]
 #   identity from $PILE_AGE_IDENTITY (key text) or $DP_IDENTITY_FILE (path).
@@ -22,7 +26,6 @@ while [ $# -gt 0 ]; do
 done
 inbox="$dir/inbox"; manifest="$inbox/manifest.json"
 [ -f "$manifest" ] || dp_die "no manifest at $manifest"
-[ -f "$inbox/seed.age" ] || dp_die "no seed.age (genesis seed) in $inbox"
 
 # Resolve the identity file.
 idfile=""
@@ -35,17 +38,32 @@ else
   dp_die "no identity (set PILE_AGE_IDENTITY or DP_IDENTITY_FILE)"
 fi
 
-k="$(age -d -i "$idfile" "$inbox/seed.age")"  # K_0
-[ -n "$k" ] || dp_die "could not unwrap seed (wrong identity?)"
+# Channel 1's seed is unwrapped lazily — a pure drop feed has no seed.age at all.
+k=""
+seed_key() {
+  if [ -z "$k" ]; then
+    [ -f "$inbox/seed.age" ] || dp_die "no seed.age (genesis seed) in $inbox"
+    k="$(age -d -i "$idfile" "$inbox/seed.age")"  # K_0
+    [ -n "$k" ] || dp_die "could not unwrap seed (wrong identity?)"
+  fi
+}
 
 decrypt_one() { # SEQ
-  local s="$1" kk="$k" i=0 block dest
-  while [ "$i" -lt "$s" ]; do kk="$(dp_ratchet_next "$kk")"; i=$((i+1)); done
-  # Integrity: derived key must match the published commitment.
+  local s="$1" kk i=0 block dest kf
+  kf="$(jq -r ".entries[$s].key // empty" "$manifest")"
+  if [ -n "$kf" ]; then
+    # drop channel: the entry's own age-wrapped per-block key.
+    [ -f "$inbox/$kf" ] || dp_die "missing key file $kf at seq $s"
+    kk="$(age -d -i "$idfile" "$inbox/$kf")" || dp_die "could not unwrap $kf (wrong identity?)"
+  else
+    seed_key; kk="$k"
+    while [ "$i" -lt "$s" ]; do kk="$(dp_ratchet_next "$kk")"; i=$((i+1)); done
+  fi
+  # Integrity: the key in hand must match the published commitment.
   local want got
   want="$(jq -r ".entries[$s].ratchet_pub" "$manifest")"
   got="sha256:$(dp_ratchet_pub "$kk")"
-  [ "$want" = "$got" ] || dp_die "ratchet key mismatch at seq $s"
+  [ "$want" = "$got" ] || dp_die "key commitment mismatch at seq $s"
   block="$(jq -r ".entries[$s].block" "$manifest")"
   if [ -n "$out" ]; then
     mkdir -p "$out"; dest="$out/$s.txt"; dp_dec "$kk" "$inbox/$block" "$dest"
