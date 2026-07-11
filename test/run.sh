@@ -125,6 +125,27 @@ pk="$work/pilenew-kg"; mkdir -p "$pk"; cp pile.yml "$pk/"
 bin/pile-new fill --dir "$pk" --id fc-q2 --scope colorado --keygen 2>/dev/null
 grep -q '^age_recipient: "age1' "$pk/pile.yml" || fail "keygen fill did not set a recipient"
 grep -rq 'AGE-SECRET-KEY' "$pk" && fail "keygen fill leaked an identity into the checkout" || true
+
+if command -v node >/dev/null 2>&1; then
+  # the on-device port (bin/pile-new.mjs) must fill byte-identically to bash for a fixed recipient,
+  # and its --keygen must mint on-device (age battery) without leaking the identity into the checkout.
+  pnm="$work/pilenew-mjs"; mkdir -p "$pnm"; cp pile.yml "$pnm/"
+  node bin/pile-new.mjs fill --dir "$pnm" --id cd04-q1 --scope colorado --recipient "$RECIP" \
+    --owner acme --name tank --provisioner "acme/host" \
+    --source-url "https://tell.anecdote.channel/piles/cd04-q1/feed/" 2>/dev/null
+  # fresh bash fill into its own dir for an apples-to-apples byte compare (the $pn above was re-filled)
+  pnb="$work/pilenew-bash"; mkdir -p "$pnb"; cp pile.yml "$pnb/"
+  bin/pile-new fill --dir "$pnb" --id cd04-q1 --scope colorado --recipient "$RECIP" \
+    --owner acme --name tank --provisioner "acme/host" \
+    --source-url "https://tell.anecdote.channel/piles/cd04-q1/feed/" 2>/dev/null
+  diff "$pnb/pile.yml" "$pnm/pile.yml" >/dev/null || fail "pile-new.mjs fill differs from bash pile.yml"
+  diff "$pnb/keys/pile.age.pub" "$pnm/keys/pile.age.pub" >/dev/null || fail "pile-new.mjs keys differ from bash"
+  pkm="$work/pilenew-mjs-kg"; mkdir -p "$pkm"; cp pile.yml "$pkm/"
+  node bin/pile-new.mjs fill --dir "$pkm" --id fc-q2 --scope colorado --keygen 2>/dev/null
+  grep -q '^age_recipient: "age1' "$pkm/pile.yml" || fail "pile-new.mjs --keygen did not set a recipient"
+  grep -rq 'AGE-SECRET-KEY' "$pkm" && fail "pile-new.mjs --keygen leaked an identity into the checkout" || true
+  ok "pile-new.mjs port fills byte-identically to bash + mints identity on-device (age battery), no leak"
+fi
 # Custody refusals: no posture; both postures; provisioner+keygen (the rule); bad recipient; bad id.
 bin/pile-new plan --id a --scope s 2>/dev/null && fail "accepted no identity posture" || true
 bin/pile-new plan --id a --scope s --keygen --recipient "$RECIP" 2>/dev/null && fail "accepted both postures" || true
