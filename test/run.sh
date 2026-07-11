@@ -63,6 +63,16 @@ cp -r "$work/pile" "$work/pub"; rm -f "$work/pub/inbox/seed.age"   # key-less ch
 bin/prove --dir "$work/pub" --check "$bundle" >/dev/null || fail "public proof did not verify"
 ok "checkpoint proves blocks 1.. against the signed manifest"
 
+if command -v node >/dev/null 2>&1; then
+  # the on-device port (bin/prove.mjs) must agree with the bash bin, both directions
+  node bin/prove.mjs --dir "$work/pub" --check "$bundle" >/dev/null || fail "prove.mjs --check did not verify the bash bundle"
+  bash_ckey="$(jq -r .checkpoint_key "$bundle")"
+  DP_IDENTITY_FILE="$work/id.txt" node bin/prove.mjs --dir "$work/pile" --from 1 >/dev/null || fail "prove.mjs --from failed (age-open)"
+  [ "$(jq -r .checkpoint_key "$bundle")" = "$bash_ckey" ] || fail "prove.mjs checkpoint_key differs from bash"
+  bin/prove --dir "$work/pub" --check "$bundle" >/dev/null || fail "bash --check did not verify the prove.mjs bundle"
+  ok "prove.mjs port agrees with bin/prove (checkpoint bundle, both directions)"
+fi
+
 echo "[6] forward-only: checkpoint K_1 must NOT decrypt block 0"
 k1="$(jq -r '.checkpoint_key' "$bundle")"
 want0="$(jq -r '.entries[0].ratchet_pub' "$work/pub/inbox/manifest.json")"
@@ -191,6 +201,14 @@ jq -e '.block_keys | has("0") | not' "$dbundle" >/dev/null || fail "drop proof l
 cp -r "$work/dpile" "$work/dpub"; rm -f "$work/dpub/inbox/"*.kage   # key-less checkout
 bin/prove --dir "$work/dpub" --check "$dbundle" >/dev/null || fail "public drop proof did not verify"
 ok "block_keys bundle proves named blocks only; each key opens only its own block"
+
+if command -v node >/dev/null 2>&1; then
+  # the on-device port must agree on the drop (block_keys) bundle too, both directions
+  node bin/prove.mjs --dir "$work/dpub" --check "$dbundle" >/dev/null || fail "prove.mjs drop --check did not verify the bash bundle"
+  DP_IDENTITY_FILE="$work/id.txt" node bin/prove.mjs --dir "$work/dpile" --source drop --from 1 >/dev/null || fail "prove.mjs drop --from failed (age-open per-block keys)"
+  bin/prove --dir "$work/dpub" --check "$dbundle" >/dev/null || fail "bash --check did not verify the prove.mjs drop bundle"
+  ok "prove.mjs drop port agrees with bin/prove (block_keys, both directions)"
+fi
 
 echo "ALL TESTS PASSED"
 
