@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+# Reserve a POLL on a stood-up pile — "a poll is a data pile with the question attached"
+# (tell.anecdote.channel/docs/solicitation.md). bin/pile-new stands up the tank; this attaches the
+# poll's SHOWN anchor to it: polls/<poll>.json carrying what a respondent is shown (question, type,
+# options, guidance), with the QR slot RESERVED (qr:null) until signing. Minting the QR is the act of
+# declaring the poll shareable, so it is deferred — bin/qr fills the slot later.
+#
+# This anchor is the SHOWN copy, NOT the governing rule. The Tell governs, from its own registry
+# (_data/constitutions/<pile>/<poll>.json, authored by tell bin/poll — the `governed_by` pointer
+# records where). The pile carries the shown copy so the poll is "there to be called up" on the tank
+# it belongs to; the layering is tell/docs/per-poll-registry.md (Layer 1 governs, the QR is Layer 2).
+#
+#   bin/pile-poll --dir PATH --poll POLL --question Q
+#                 [--type multichoice|open]   default: multichoice if --opts given, else open
+#                 [--opts "A,B,C"]            the prefab answers — their PRESENCE makes it a solicitation
+#                 [--guidance TEXT]           the shown guidance
+#                 [--accept-writein]          shown as accepting write-ins (default: off for multichoice)
+#                 [--round R]                 default 1
+#                 [--out PATH|-]              default: <dir>/polls/<poll>.json ; "-" = stdout
+#
+# --dir must be a pile checkout (a filled pile.yml with a non-empty id). Prints the next steps: author
+# the governing constitution on the Tell (bin/poll), and — at signing — mint the QR into the slot.
+set -euo pipefail
+here="$(cd "$(dirname "$0")" && pwd)"
+. "$here/lib.sh"
+
+dir=""; poll=""; question=""; type=""; opts=""; guidance=""; accept_writein=""; round="1"; out=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --dir) dir="$2"; shift 2;;
+    --poll) poll="$2"; shift 2;;
+    --question) question="$2"; shift 2;;
+    --type) type="$2"; shift 2;;
+    --opts) opts="$2"; shift 2;;
+    --guidance) guidance="$2"; shift 2;;
+    --accept-writein) accept_writein="1"; shift;;
+    --round) round="$2"; shift 2;;
+    --out) out="$2"; shift 2;;
+    *) dp_die "pile-poll: unknown arg: $1";;
+  esac
+done
+[ -n "$dir" ] && [ -n "$poll" ] && [ -n "$question" ] || \
+  dp_die "usage: bin/pile-poll --dir PATH --poll POLL --question Q [--type multichoice|open] [--opts CSV] [--guidance G] [--accept-writein] [--round R] [--out PATH|-]"
+printf '%s' "$poll" | grep -Eq '^[a-z0-9][a-z0-9-]*$' || dp_die "pile-poll: --poll must be a lowercase slug (it is a path segment)"
+
+# --dir must be a pile checkout with a filled identity — the poll attaches to a REAL, stood-up tank.
+[ -f "$dir/pile.yml" ] || dp_die "pile-poll: $dir has no pile.yml (run bin/pile-new first?)"
+pile="$(sed -n 's/^id: "\(.*\)"/\1/p' "$dir/pile.yml" | head -1)"
+[ -n "$pile" ] || dp_die "pile-poll: $dir/pile.yml has no id — stand the pile up first (bin/pile-new fill)"
+
+# Default the type from whether prefab answers were supplied: options => a solicitation.
+[ -n "$type" ] || { [ -n "$opts" ] && type="multichoice" || type="open"; }
+
+opts_json="[]"
+[ -n "$opts" ] && opts_json="$(printf '%s' "$opts" | jq -R 'split(",") | map(gsub("^\\s+|\\s+$";"")) | map(select(length>0))')"
+nopts="$(printf '%s' "$opts_json" | jq 'length')"
+
+case "$type" in
+  multichoice)
+    # THE INVARIANT (shared with tell bin/poll): a poll solicits, and the signal is a prefab answer.
+    [ "$nopts" -ge 1 ] || dp_die "a multichoice poll needs at least one prefab answer — a prefab answer is what makes a payload a SOLICITATION (solicitation.md). For an unsolicited statement, use an anecdote, not a poll."
+    [ -n "$accept_writein" ] && aw=true || aw=false ;;
+  open)
+    [ "$nopts" -eq 0 ] || dp_die "an open poll carries no prefab options (got $nopts) — use --type multichoice for a fixed-answer poll"
+    aw=true ;;
+  *) dp_die "pile-poll: unknown --type: $type (expected multichoice|open)" ;;
+esac
+
+if [ -z "$guidance" ]; then
+  if [ "$type" = multichoice ]; then
+    guidance="One of the listed options."; [ "$aw" = false ] && guidance="$guidance Write-ins are not counted for this poll."
+  else
+    guidance="An open answer; the judge decides what abides."
+  fi
+fi
+
+# The SHOWN anchor. `governed_by` names where the RULE lives (the Tell); `qr:null` is the reserved slot
+# minted at signing. `shown:true` marks this as the display copy, never the governing constitution.
+if printf '%s' "$round" | grep -Eq '^[0-9]+$'; then round_json="$round"; else round_json="$(printf '%s' "$round" | jq -R .)"; fi
+anchor="$(jq -n \
+  --arg pile "$pile" --arg poll "$poll" --arg type "$type" --arg text "$question" \
+  --argjson options "$opts_json" --argjson aw "$aw" --arg guidance "$guidance" \
+  --argjson round "$round_json" \
+  '{schema:"data-pile.poll-anchor/v1", pile:$pile, poll:$poll, shown:true,
+    type:$type, text:$text, options:$options, accept_writein:$aw, guidance:$guidance,
+    round:$round, qr:null,
+    governed_by:("tell:_data/constitutions/" + $pile + "/" + $poll + ".json")}')"
+
+if [ "$out" = "-" ]; then
+  printf '%s\n' "$anchor"
+  exit 0
+fi
+dest="${out:-$dir/polls/$poll.json}"
+mkdir -p "$(dirname "$dest")"
+printf '%s\n' "$anchor" > "$dest"
+dp_log "reserved poll '$poll' on pile '$pile' -> $dest (shown copy; qr slot reserved)"
+echo "  the RULE is authored on the Tell (this anchor is only what's shown):" >&2
+echo "    tell bin/poll --pile $pile --poll $poll --type $type --question \"$question\"${opts:+ --opts \"$opts\"}" >&2
+echo "  at SIGNING, mint the QR into the reserved slot (declares the poll shareable):" >&2
+echo "    tell bin/qr --pile $pile --poll $poll --round $round${opts:+ --opts \"$opts\"} --signkey <key>" >&2

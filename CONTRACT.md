@@ -113,12 +113,19 @@ onto Tell and Tell never pulls. Here Tell *publishes* and the pile *pulls*:
 ## What the pile is — and is not
 
 The pile is a **pure consumer**: an encrypted mailbox plus a reader. It **collects nothing** (no
-Issue intake, no QR, no poll definitions — those live on Tell), it **judges nothing as a round**
-(Tell attaches the delegated verdict before sealing; the owner may re-judge by hand), and it holds
-**no key that seals** — only its *public* `age` recipient (`keys/pile.age.pub`, encrypt-only) and,
-as a repo secret, the *private* identity that **decrypts**. Everything inbound is already ciphertext
-produced by Tell; the pile verifies and stores it. Keep it that way: anything that would have the
-pile ingest, encrypt, or originate data belongs on a Tell, not here.
+Issue intake), it **mints no QR** and holds **no *governing* poll definition** — those live on
+Tell; it **judges nothing as a round** (Tell attaches the delegated verdict before sealing; the
+owner may re-judge by hand), and it holds **no key that seals** — only its *public* `age` recipient
+(`keys/pile.age.pub`, encrypt-only) and, as a repo secret, the *private* identity that **decrypts**.
+Everything inbound is already ciphertext produced by Tell; the pile verifies and stores it. Keep it
+that way: anything that would have the pile ingest, encrypt, or originate data belongs on a Tell,
+not here.
+
+The one thing a pile *may* carry about a poll is its **shown anchor** (`polls/<poll>.json`, below) —
+a display copy of what a respondent is shown, with the QR slot reserved until signing. It is
+**not** a governing definition (the Tell's constitution governs) and it is **not** a minted QR
+(`qr: null`); it is legibility, so "a poll is a data pile with the question attached" is literally
+true on the tank the poll belongs to.
 
 > **Second channel (specified, not yet built): Tell-less out-of-band contribution.** This document
 > governs **channel 1** — the inbound Tell ratchet feed. Because `keys/pile.age.pub` is public, a
@@ -166,6 +173,39 @@ provisioner_spec: "data-pile/pile-new/v1"   # WHAT they speak — this spec's id
   both fields when present, so the Tell's `_data/piles.yml` — the registry anything consults —
   shows which of its piles are managed, and by what. The provisioner held the *create* credential
   only; the custody rule stands (it never touched the identity — see `keys/custody.yml`).
+
+## The poll anchor (shown, not governing)
+
+"A poll is a data pile with the question attached"
+([tell `docs/solicitation.md`](https://github.com/FCCN-ANTIBODY/tell.anecdote.channel/blob/main/docs/solicitation.md)):
+the pile is stood up first, and a poll is *reserved* on it — the question riding on the tank it
+belongs to, "there to be called up." That reservation is a `polls/<poll>.json` **anchor**, written
+by `bin/pile-poll` (bash, Computer-side) or `bin/pile-poll.mjs` (**the lead** — the offline origin,
+pure fs, no shell). Both emit the same bytes.
+
+```json
+{
+  "schema": "data-pile.poll-anchor/v1",
+  "pile": "cd04-q1", "poll": "budget", "shown": true,
+  "type": "multichoice", "text": "Cut or keep the library budget?",
+  "options": ["Cut", "Keep"], "accept_writein": false,
+  "guidance": "One of the listed options. Write-ins are not counted for this poll.",
+  "round": 1,
+  "qr": null,
+  "governed_by": "tell:_data/constitutions/cd04-q1/budget.json"
+}
+```
+
+- **`shown: true`** — this is the display copy, what a respondent is shown; it **governs nothing**.
+- **`governed_by`** — where the rule *does* live: the Tell's per-poll constitution
+  (`tell bin/poll` authors it; the judge reads it, tell `docs/per-poll-registry.md` Layer 1).
+- **`qr: null`** — the slot is **reserved**, not filled. Minting the QR (Layer 2, `tell bin/qr`) is
+  the act of declaring the poll shareable, so it is deferred to signing.
+- **The solicitation invariant holds here too** — a `multichoice` anchor must carry at least one
+  prefab answer (the signal of solicitation); a payload with none is an anecdote, not a poll.
+
+The anchor originates nothing and seals nothing — it is legibility on the tank, consistent with
+"What the pile is — and is not" above.
 
 ## What the pile requires of Tell
 

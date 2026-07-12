@@ -159,6 +159,35 @@ bin/pile-new plan --id a --scope s --recipient "$RECIP" 2>/dev/null | grep -q "n
   || fail "plan did not narrate the Mobile custody"
 ok "pile-new: fill fills, attestation stamps once, provisioner-never-keygens enforced, malformed refused"
 
+echo "[9b] bin/pile-poll: reserve a poll on the stood-up pile — SHOWN anchor, qr slot reserved (JS leads)"
+pp="$work/pilepoll"; mkdir -p "$pp"; cp pile.yml "$pp/"
+bin/pile-new fill --dir "$pp" --id cd04-q1 --scope colorado --recipient "$RECIP" 2>/dev/null
+if command -v node >/dev/null 2>&1; then
+  # The offline origin is the LEAD: pile-poll.mjs writes the anchor on-device (pure fs, no jq/shell).
+  node bin/pile-poll.mjs --dir "$pp" --poll budget --question "Cut or keep the library budget?" --opts "Cut, Keep" 2>/dev/null
+  a="$pp/polls/budget.json"
+  [ -f "$a" ] || fail "pile-poll.mjs did not write the pile-side poll anchor"
+  [ "$(jq -r '.schema' "$a")" = "data-pile.poll-anchor/v1" ] || fail "anchor schema wrong"
+  [ "$(jq -r '.shown' "$a")" = true ] || fail "anchor is not marked as the SHOWN copy"
+  [ "$(jq -r '.qr' "$a")" = null ] || fail "the QR slot is not reserved (should be null until signing)"
+  [ "$(jq -r '.options|length' "$a")" = 2 ] || fail "anchor dropped the prefab answers"
+  [ "$(jq -r '.governed_by' "$a")" = "tell:_data/constitutions/cd04-q1/budget.json" ] || fail "anchor does not point at the Tell-side governing constitution"
+  # The bash mirror must agree BYTE-FOR-BYTE (the pile-new.mjs<->bash discipline).
+  node bin/pile-poll.mjs --dir "$pp" --poll budget --question "Cut or keep the library budget?" --opts "Cut, Keep" --out - 2>/dev/null > "$work/pp.js"
+  bin/pile-poll        --dir "$pp" --poll budget --question "Cut or keep the library budget?" --opts "Cut, Keep" --out - 2>/dev/null > "$work/pp.sh"
+  diff "$work/pp.js" "$work/pp.sh" >/dev/null || fail "pile-poll bash mirror differs from the pile-poll.mjs lead"
+  # THE INVARIANT (shared with tell bin/poll): a poll solicits; a multichoice with no prefab answer is refused.
+  node bin/pile-poll.mjs --dir "$pp" --poll void --question q --type multichoice --out - >/dev/null 2>&1 && fail "pile-poll.mjs authored a multichoice poll with no prefab answer" || true
+  node bin/pile-poll.mjs --dir "$pp" --poll bad  --question q --type open --opts "A,B" --out - >/dev/null 2>&1 && fail "pile-poll.mjs authored an open poll with prefab options" || true
+  # Custody-of-shape: refuses a dir with no stood-up pile.
+  node bin/pile-poll.mjs --dir "$work/nopile" --poll x --question q --opts A --out - >/dev/null 2>&1 && fail "pile-poll.mjs attached to a non-pile dir" || true
+  ok "pile-poll.mjs reserves the SHOWN anchor (qr slot null, governed_by -> Tell); bash mirror byte-identical; invariant enforced"
+else
+  bin/pile-poll --dir "$pp" --poll budget --question "Cut or keep the library budget?" --opts "Cut, Keep" 2>/dev/null
+  [ "$(jq -r '.qr' "$pp/polls/budget.json")" = null ] || fail "the QR slot is not reserved"
+  ok "pile-poll (bash) reserves the SHOWN anchor (node absent — JS lead not cross-checked here)"
+fi
+
 # ── the drop channel (channel 2, docs/transfer.md §B) ─────────────────────────
 dropkey=""; dsigners="$work/drop.signers"
 if [ -n "$signkey" ]; then
