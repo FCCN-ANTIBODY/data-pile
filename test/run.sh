@@ -140,11 +140,22 @@ if command -v node >/dev/null 2>&1; then
     --source-url "https://tell.anecdote.channel/piles/cd04-q1/feed/" 2>/dev/null
   diff "$pnb/pile.yml" "$pnm/pile.yml" >/dev/null || fail "pile-new.mjs fill differs from bash pile.yml"
   diff "$pnb/keys/pile.age.pub" "$pnm/keys/pile.age.pub" >/dev/null || fail "pile-new.mjs keys differ from bash"
+  # The PURE, fs-free core (fillPile) is what the offline origin runs over an in-memory file-set — it must
+  # yield the SAME bytes as the on-disk fill, so a pile stood up offline equals one filled in a checkout.
+  ppd="$work/pilenew-pure"; mkdir -p "$ppd"
+  RECIP="$RECIP" PPD="$ppd" node --input-type=module -e '
+    import { readFileSync, writeFileSync } from "node:fs";
+    import { fillPile } from "./bin/pile-new.mjs";
+    const { pileYaml, keyPub } = fillPile(readFileSync("pile.yml", "utf8"), { id: "cd04-q1", scope: "colorado", recipient: process.env.RECIP, owner: "acme", name: "tank", provisioner: "acme/host", sourceUrl: "https://tell.anecdote.channel/piles/cd04-q1/feed/" });
+    writeFileSync(process.env.PPD + "/pile.yml", pileYaml); writeFileSync(process.env.PPD + "/pile.age.pub", keyPub);
+  ' || fail "fillPile (pure core) threw"
+  diff "$pnm/pile.yml" "$ppd/pile.yml" >/dev/null || fail "fillPile pure core differs from the on-disk fill (offline != checkout)"
+  diff "$pnm/keys/pile.age.pub" "$ppd/pile.age.pub" >/dev/null || fail "fillPile pure core keys differ from the on-disk fill"
   pkm="$work/pilenew-mjs-kg"; mkdir -p "$pkm"; cp pile.yml "$pkm/"
   node bin/pile-new.mjs fill --dir "$pkm" --id fc-q2 --scope colorado --keygen 2>/dev/null
   grep -q '^age_recipient: "age1' "$pkm/pile.yml" || fail "pile-new.mjs --keygen did not set a recipient"
   grep -rq 'AGE-SECRET-KEY' "$pkm" && fail "pile-new.mjs --keygen leaked an identity into the checkout" || true
-  ok "pile-new.mjs port fills byte-identically to bash + mints identity on-device (age battery), no leak"
+  ok "pile-new.mjs port fills byte-identically to bash + mints identity on-device (age battery), no leak; pure fillPile matches the on-disk fill"
 fi
 # Custody refusals: no posture; both postures; provisioner+keygen (the rule); bad recipient; bad id.
 bin/pile-new plan --id a --scope s 2>/dev/null && fail "accepted no identity posture" || true
