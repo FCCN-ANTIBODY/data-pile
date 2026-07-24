@@ -271,6 +271,12 @@ if command -v node >/dev/null 2>&1; then
   ok "prove.mjs drop port agrees with bin/prove (block_keys, both directions)"
 fi
 
+if command -v node >/dev/null 2>&1; then
+  echo "[14b] feed-open: the room's consumer core agrees with the bash producer (verify + decrypt in JS)"
+  node "$root/test/feed-open.test.mjs" || fail "feed-open cross-check failed"
+  ok "feed-open.mjs: digest/signature/chain/ratchet/plaintext all agree; refusals hold"
+fi
+
 echo "ALL TESTS PASSED"
 
 echo "[15] custody: the declared boundary holds (keys/custody.yml x bin/check-custody)"
