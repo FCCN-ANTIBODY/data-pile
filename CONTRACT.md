@@ -207,6 +207,42 @@ pure fs, no shell). Both emit the same bytes.
 The anchor originates nothing and seals nothing — it is legibility on the tank, consistent with
 "What the pile is — and is not" above.
 
+## The ask anchor (shown, not governing)
+
+An **ask** is the other anchor a pile can wear. Where a poll is an anecdote *with* prefab answers
+(a solicitation), an ask is an anecdote *without* them — "here is a thing; do you need this?
+citation required." It is exactly the case the poll invariant points at: *a payload with no prefab
+answer is an anecdote, not a poll.* `bin/pile-ask` (bash) / `bin/pile-ask.mjs` (**the lead**, the
+offline origin) reserve it as an `asks/<ask>.json` **anchor**. Both emit the same bytes.
+
+```json
+{
+  "schema": "data-pile.ask-anchor/v1",
+  "pile": "cd04", "ask": "water-main", "shown": true,
+  "intent": "ask",
+  "to": { "kind": "url", "url": "https://city.example/agenda" },
+  "text": "Third break this month on Elm.",
+  "guidance": "Cite this, or add what you can — an open ask: anything abides, nothing is auto-rejected.",
+  "round": 1,
+  "qr": null,
+  "governed_by": "tell:_data/constitutions/cd04/water-main.json"
+}
+```
+
+- **`intent: "ask"`** — selects how replies read: not answers to be tallied but **citations** (or
+  derivatives, or more hearsay) appended to the tank. One anchor family, dispatched by intent.
+- **`to` / `text`** — an ask must point at SOMETHING: an object reference (`to`, the anecdote's
+  `to.url`), a statement (`text`, the anecdote's `body[0]`), or both. It carries **no `options`** —
+  a prefab answer would make it a solicitation (a poll), so `--opts` is refused.
+- **`governed_by`** — an **OPEN** constitution ("citation required": admits anything, auto-rejects
+  nothing, but keeps the vouch/origin stamp), authored on the Tell. The anchor is the shown copy; it
+  governs nothing.
+- **`shown` / `qr`** — as for the poll anchor: the display copy, with the QR slot reserved until
+  signing.
+
+The design rationale — a pile wears an anchor anecdote, `poll` and `ask` being two intents over one
+schema family — is in [`docs/anchored-piles.md`](docs/anchored-piles.md).
+
 ## What the pile requires of Tell
 
 The pile depends only on this. How Tell stages digests internally (e.g. batching) is Tell's
