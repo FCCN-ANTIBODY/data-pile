@@ -199,6 +199,35 @@ else
   ok "pile-poll (bash) reserves the SHOWN anchor (node absent — JS lead not cross-checked here)"
 fi
 
+echo "[9c] bin/pile-ask: reserve an ASK on the stood-up pile — anecdote anchor, NO prefab answers (JS leads)"
+if command -v node >/dev/null 2>&1; then
+  # The offline origin is the LEAD: pile-ask.mjs writes the anchor on-device (pure fs, no jq/shell).
+  node bin/pile-ask.mjs --dir "$pp" --ask water-main --url "https://city.example/agenda" --text "Third break on Elm." 2>/dev/null
+  k="$pp/asks/water-main.json"
+  [ -f "$k" ] || fail "pile-ask.mjs did not write the pile-side ask anchor"
+  [ "$(jq -r '.schema' "$k")" = "data-pile.ask-anchor/v1" ] || fail "ask anchor schema wrong"
+  [ "$(jq -r '.intent' "$k")" = "ask" ] || fail "ask anchor missing intent:ask"
+  [ "$(jq -r '.shown' "$k")" = true ] || fail "ask anchor is not marked as the SHOWN copy"
+  [ "$(jq -r '.qr' "$k")" = null ] || fail "the QR slot is not reserved (should be null until signing)"
+  [ "$(jq 'has("options")' "$k")" = false ] || fail "an ask must carry NO prefab answers (options would make it a poll)"
+  [ "$(jq -r '.to.url' "$k")" = "https://city.example/agenda" ] || fail "ask dropped the object reference"
+  [ "$(jq -r '.governed_by' "$k")" = "tell:_data/constitutions/cd04-q1/water-main.json" ] || fail "ask does not point at the Tell-side OPEN constitution"
+  # The bash mirror must agree BYTE-FOR-BYTE (the pile-poll.mjs<->bash discipline).
+  node bin/pile-ask.mjs --dir "$pp" --ask water-main --url "https://city.example/agenda" --text "Third break on Elm." --out - 2>/dev/null > "$work/ak.js"
+  bin/pile-ask        --dir "$pp" --ask water-main --url "https://city.example/agenda" --text "Third break on Elm." --out - 2>/dev/null > "$work/ak.sh"
+  diff "$work/ak.js" "$work/ak.sh" >/dev/null || fail "pile-ask bash mirror differs from the pile-ask.mjs lead"
+  # THE INVARIANT (inverse of the poll's): an ask points at a thing, and it refuses prefab answers.
+  node bin/pile-ask.mjs --dir "$pp" --ask void --out - >/dev/null 2>&1 && fail "pile-ask.mjs authored an ask that points at nothing" || true
+  node bin/pile-ask.mjs --dir "$pp" --ask sol --text x --opts "A,B" --out - >/dev/null 2>&1 && fail "pile-ask.mjs accepted prefab answers (that is a poll, not an ask)" || true
+  # Custody-of-shape: refuses a dir with no stood-up pile.
+  node bin/pile-ask.mjs --dir "$work/nopile" --ask x --text y --out - >/dev/null 2>&1 && fail "pile-ask.mjs attached to a non-pile dir" || true
+  ok "pile-ask.mjs reserves the SHOWN ask anchor (intent:ask, no options, governed_by -> Tell OPEN); bash mirror byte-identical; invariant enforced"
+else
+  bin/pile-ask --dir "$pp" --ask water-main --url "https://city.example/agenda" 2>/dev/null
+  [ "$(jq -r '.intent' "$pp/asks/water-main.json")" = "ask" ] || fail "ask anchor missing intent"
+  ok "pile-ask (bash) reserves the SHOWN ask anchor (node absent — JS lead not cross-checked here)"
+fi
+
 # ── the drop channel (channel 2, docs/transfer.md §B) ─────────────────────────
 dropkey=""; dsigners="$work/drop.signers"
 if [ -n "$signkey" ]; then

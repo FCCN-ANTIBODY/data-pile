@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+# Reserve an ASK on a stood-up pile — the OTHER anchor a pile can wear. Where a poll is an anecdote
+# WITH prefab answers (a solicitation), an ask is an anecdote WITHOUT them: "here is a thing; do you
+# need this? citation required." It is the case bin/pile-poll's own invariant points at ("For an
+# unsolicited statement, use an anecdote, not a poll"). bin/pile-new stands up the tank; this attaches
+# the ask's SHOWN anchor to it: asks/<ask>.json carrying the object (to), the statement (text) and
+# guidance, with the QR slot RESERVED (qr:null) until signing.
+#
+#   pile-poll -> data-pile.poll-anchor/v1  (prefab options => a SOLICITATION; replies are answers)
+#   pile-ask  -> data-pile.ask-anchor/v1   (an object reference, NO options; replies are citations)
+#
+# This anchor is the SHOWN copy, NOT the governing rule. The governing constitution is OPEN ("citation
+# required": admits anything, auto-rejects nothing, keeps the vouch/origin stamp), authored on the Tell
+# at _data/constitutions/<pile>/<ask>.json; `governed_by` records where. bin/pile-ask.mjs is the lead
+# (offline origin, pure fs); both emit the same bytes. See docs/anchored-piles.md.
+#
+#   bin/pile-ask --dir PATH --ask ASK
+#                [--url URL]        the object being asked about (anecdote `to.url`)
+#                [--kind KIND]      object kind (default: url when --url given)
+#                [--text TEXT]      the unsolicited statement (anecdote body[0])
+#                [--guidance TEXT] [--round R] [--out PATH|-]
+#   An ask must point at SOMETHING: give --url or --text (or both). It carries NO prefab answers.
+set -euo pipefail
+here="$(cd "$(dirname "$0")" && pwd)"
+. "$here/lib.sh"
+
+dir=""; ask=""; url=""; kind=""; text=""; guidance=""; round="1"; out=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --dir) dir="$2"; shift 2;;
+    --ask) ask="$2"; shift 2;;
+    --url) url="$2"; shift 2;;
+    --kind) kind="$2"; shift 2;;
+    --text) text="$2"; shift 2;;
+    --guidance) guidance="$2"; shift 2;;
+    --round) round="$2"; shift 2;;
+    --out) out="$2"; shift 2;;
+    --opts) dp_die "an ask carries no prefab answers — a prefab answer is what makes a payload a SOLICITATION (a poll). Use bin/pile-poll for that.";;
+    *) dp_die "pile-ask: unknown arg: $1";;
+  esac
+done
+[ -n "$dir" ] && [ -n "$ask" ] || \
+  dp_die "usage: bin/pile-ask --dir PATH --ask ASK [--url URL] [--kind KIND] [--text TEXT] [--guidance G] [--round R] [--out PATH|-]"
+printf '%s' "$ask" | grep -Eq '^[a-z0-9][a-z0-9-]*$' || dp_die "pile-ask: --ask must be a lowercase slug (it is a path segment)"
+
+# THE INVARIANT (inverse of the poll's): an ask points at a thing but never prescribes the answer.
+[ -n "$url" ] || [ -n "$text" ] || \
+  dp_die "an ask must point at SOMETHING — give --url (the object) or --text (the statement). An ask with neither points at nothing."
+
+# --dir must be a pile checkout with a filled identity — the ask attaches to a REAL, stood-up tank.
+[ -f "$dir/pile.yml" ] || dp_die "pile-ask: $dir has no pile.yml (run bin/pile-new first?)"
+pile="$(sed -n 's/^id: "\(.*\)"/\1/p' "$dir/pile.yml" | head -1)"
+[ -n "$pile" ] || dp_die "pile-ask: $dir/pile.yml has no id — stand the pile up first (bin/pile-new fill)"
+
+[ -n "$guidance" ] || guidance="Cite this, or add what you can — an open ask: anything abides, nothing is auto-rejected."
+
+# The object being asked about. Absent a --url the ask stands on its --text alone (to:null).
+if [ -n "$url" ]; then
+  [ -n "$kind" ] || kind="url"
+  to_json="$(jq -n --arg kind "$kind" --arg url "$url" '{kind:$kind, url:$url}')"
+else
+  to_json="null"
+fi
+
+# The SHOWN anchor. `intent:"ask"` selects how replies read (citations, not answers); `qr:null` is the
+# reserved slot minted at signing; `shown:true` marks this the display copy, never the governing rule.
+if printf '%s' "$round" | grep -Eq '^[0-9]+$'; then round_json="$round"; else round_json="$(printf '%s' "$round" | jq -R .)"; fi
+anchor="$(jq -n \
+  --arg pile "$pile" --arg ask "$ask" --argjson to "$to_json" --arg text "$text" \
+  --arg guidance "$guidance" --argjson round "$round_json" \
+  '{schema:"data-pile.ask-anchor/v1", pile:$pile, ask:$ask, shown:true,
+    intent:"ask", to:$to, text:$text, guidance:$guidance,
+    round:$round, qr:null,
+    governed_by:("tell:_data/constitutions/" + $pile + "/" + $ask + ".json")}')"
+
+if [ "$out" = "-" ]; then
+  printf '%s\n' "$anchor"
+  exit 0
+fi
+dest="${out:-$dir/asks/$ask.json}"
+mkdir -p "$(dirname "$dest")"
+printf '%s\n' "$anchor" > "$dest"
+dp_log "reserved ask '$ask' on pile '$pile' -> $dest (shown copy; qr slot reserved)"
+echo "  the RULE lives on the Tell as an OPEN constitution (this anchor is only what's shown):" >&2
+echo "    author _data/constitutions/$pile/$ask.json (citation required: admits anything, auto-rejects nothing)" >&2
+echo "  at SIGNING, mint the QR into the reserved slot (declares the ask shareable)." >&2
