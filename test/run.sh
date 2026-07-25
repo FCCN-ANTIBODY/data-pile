@@ -304,6 +304,9 @@ if command -v node >/dev/null 2>&1; then
   echo "[14b] feed-open: the room's consumer core agrees with the bash producer (verify + decrypt in JS)"
   node "$root/test/feed-open.test.mjs" || fail "feed-open cross-check failed"
   ok "feed-open.mjs: digest/signature/chain/ratchet/plaintext all agree; refusals hold"
+  echo "[14c] describe: the ring-one crunch — the pile puts itself forward from its public surface alone"
+  node "$root/test/describe.test.mjs" || fail "describe crunch test failed"
+  ok "describe.mjs: anchors skimmable, sealed blocks counted never read, empty is a dated statement"
 fi
 
 echo "ALL TESTS PASSED"
