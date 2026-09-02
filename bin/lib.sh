@@ -62,6 +62,26 @@ dp_expand_seqs() { # SPEC
     }' | sort -n -u
 }
 
+# Rewrite a line in place, portably. NOT `sed -i`: GNU and BSD disagree on it (BSD reads the
+# NEXT ARGUMENT as a backup suffix, so `sed -i "s|...|" f` silently treats the script as the
+# suffix and the filename as the script) and on the `0,/re/` address, which is a GNU extension.
+# On macOS that combination left pile.yml UNEDITED — a mis-provisioned pile that looked like a
+# provisioned one. The offline origin runs on the operator's own machine, so "works on the CI
+# runner" is not the bar.
+#
+#   dp_set_line FILE PREFIX REPLACEMENT [first]
+#
+# PREFIX is a LITERAL line prefix, not a regex — nothing here needs matching power, and literal
+# prefixes cannot be broken by a value containing regex or delimiter characters.
+dp_set_line() {
+  local file="$1" prefix="$2" repl="$3" mode="${4:-all}" tmp
+  tmp="$(mktemp)" || return 1
+  awk -v p="$prefix" -v r="$repl" -v m="$mode" '
+    index($0, p) == 1 && (m != "first" || !done) { print r; if (m == "first") done = 1; next }
+    { print }
+  ' "$file" > "$tmp" && mv "$tmp" "$file"
+}
+
 dp_die() { echo "data-pile: $*" >&2; exit 1; }
 dp_log() { echo "data-pile: $*" >&2; }
 
