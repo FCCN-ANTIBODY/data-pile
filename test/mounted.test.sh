@@ -18,9 +18,28 @@ site="$work/journal"; mkdir -p "$site"; ln -s "$root" "$site/.pile-engine"
 [ "$(DP_SITE=/elsewhere dp_site "$root")" = "/elsewhere" ] || fail "DP_SITE must override"
 ok "standalone -> itself; .pile-engine -> the site; DP_SITE -> anywhere"
 
+echo "[1b] a mounting site has NO pile.yml, and fill installs the engine's template"
+# The step that existed only in someone's head: a journal becoming a pile has nothing to fill.
+[ ! -f "$site/pile.yml" ] || fail "the fixture should start with no pile.yml"
+age-keygen -o "$work/id0" 2>/dev/null
+"$site/.pile-engine/bin/pile-new" fill --dir "$site" --id autumn-ryan --scope colorado   --recipient "$(age-keygen -y "$work/id0")" >/dev/null 2>&1 || fail "mounted fill failed"
+[ -f "$site/pile.yml" ] || fail "fill did not install the template into the site"
+grep -q '^id: "autumn-ryan"' "$site/pile.yml" || fail "installed template was not filled in"
+[ -f "$site/keys/pile.age.pub" ] || fail "no recipient committed to the site"
+# ...and the engine's own pile.yml must not have been edited in the process.
+grep -q '^id: ""' "$root/pile.yml" || fail "THE ENGINE'S TEMPLATE WAS WRITTEN INTO"
+ok "the site got a filled pile.yml; the engine's template is untouched"
+
+echo "[1c] standing alone, a directory that is not a pile is still refused"
+bare="$work/notapile"; mkdir -p "$bare"
+if (cd "$root" && bin/pile-new fill --dir "$bare" --id x --scope co       --recipient "$(age-keygen -y "$work/id0")" >/dev/null 2>&1); then
+  fail "fill adopted an arbitrary directory"
+fi
+ok "the safety that stops fill adopting any directory it is pointed at"
+
 echo "[2] a mounted engine seals into the SITE, not into itself"
 age-keygen -o "$work/id" 2>/dev/null
-mkdir -p "$site/keys"; age-keygen -y "$work/id" > "$site/keys/pile.age.pub"
+mkdir -p "$site/keys"; age-keygen -y "$work/id" > "$site/keys/pile.age.pub"   # re-key for this leg
 printf 'evidence\n' > "$site/thing.txt"
 # Invoked THROUGH the mount path, which is how a mounting site calls it.
 "$site/.pile-engine/bin/drop-pack" --dir "$site" "$site/thing.txt" >/dev/null 2>&1 \
