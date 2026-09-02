@@ -340,3 +340,7 @@ if command -v node >/dev/null 2>&1; then
 else
   ok "claim suite skipped (node absent)"
 fi
+
+echo "[19] the engine posture: mounted at a site's .pile-engine/, the tools act on the SITE"
+test/mounted.test.sh >/dev/null 2>&1 || { test/mounted.test.sh; fail "mounted engine suite failed"; }
+ok "site resolution, sealing into the site, and the standalone posture unchanged"

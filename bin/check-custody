@@ -10,10 +10,14 @@
 #   CUSTODY_YML=… WORKFLOWS_DIR=… BINS_DIR=… bin/check-custody   # the code-vs-data seams
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
-repo="$(cd "$here/.." && pwd)"
+engine="$(cd "$here/.." && pwd)"
+# The custody declaration and the workflows reading secrets belong to the SITE; the bins being
+# audited are the ENGINE's. Mounted, those are two different repositories and conflating them
+# would audit the wrong one.
+repo="$(dp_site "$engine")"
 custody="${CUSTODY_YML:-$repo/keys/custody.yml}"
 workflows="${WORKFLOWS_DIR:-$repo/.github}"
-bins="${BINS_DIR:-$repo/bin}"
+bins="${BINS_DIR:-$engine/bin}"
 
 [ -f "$custody" ] || { echo "check-custody: no custody manifest at $custody" >&2; exit 1; }
 

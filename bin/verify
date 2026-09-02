@@ -24,7 +24,8 @@
 
 here="$(cd "$(dirname "$0")" && pwd)"
 . "$here/lib.sh"
-repo="$(cd "$here/.." && pwd)"
+engine="$(cd "$here/.." && pwd)"
+repo="$(dp_site "$engine")"
 
 dir="."; source="tell"; signers=""; partial=0
 while [ $# -gt 0 ]; do
