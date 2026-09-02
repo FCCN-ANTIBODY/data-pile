@@ -119,14 +119,14 @@ if [ -n "$seqspec" ]; then
   ledger="$dir/reports/revealed.json"
   if [ -f "$ledger" ]; then
     forbidden="$(jq -r '.withheld[].seqs' "$ledger" | while read -r r; do dp_expand_seqs "$r"; done | sort -n -u)"
-    clash="$(comm -12 <(printf '%s\n' $seqs) <(printf '%s\n' $forbidden) | tr '\n' ' ')"
+    clash="$(dp_set_and "$seqs" "$forbidden")"
     if [ -n "${clash// /}" ]; then
       # A REFUSAL, not a warning. This is the editor's "take the face off before it goes
       # anywhere" — the one case where the tool should not be talked round by a hurried operator.
       dp_die "seq$(dp_ranges "$clash") is marked WITHHELD in reports/revealed.json and this would disclose it permanently. Clear the mark deliberately if that is really the intent."
     fi
     ever="$(jq -r '.events[].seqs' "$ledger" | while read -r r; do dp_expand_seqs "$r"; done | sort -n -u)"
-    fresh="$(comm -23 <(printf '%s\n' $seqs) <(printf '%s\n' $ever) | tr '\n' ' ')"
+    fresh="$(dp_set_minus "$seqs" "$ever")"
     if [ -n "${fresh// /}" ]; then
       dp_log "NEW: seq$(dp_ranges "$fresh") has never been disclosed before — publishing this cannot be undone"
     else

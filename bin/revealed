@@ -61,7 +61,7 @@ if [ -n "$withhold" ]; then
   seqs="$(dp_expand_seqs "$withhold")"
   # Refuse to mark something already public. Saying it is withheld would be a false promise, and
   # the ledger's only value is that its statements are true.
-  already="$(comm -12 <(printf '%s\n' $seqs) <(ever) | tr '\n' ' ')"
+  already="$(dp_set_and "$seqs" "$(ever)")"
   [ -n "${already// /}" ] && dp_die "revealed: seq$(dp_ranges "$already") already disclosed — marking it withheld now would be a promise this pile cannot keep"
   jq --arg r "$(trim "$(dp_ranges "$(printf '%s ' $seqs)")")" --arg why "$reason" --arg at "$(date -u +%FT%TZ)" \
      '.withheld += [{seqs:$r, reason:$why, at:$at}]' "$ledger" > "$ledger.tmp" && mv "$ledger.tmp" "$ledger"
@@ -77,7 +77,7 @@ fi
 
 out="$(ever | tr '\n' ' ')"; hid="$(forbidden | tr '\n' ' ')"
 n_out="$(printf '%s\n' $out | grep -c . || true)"
-sealed="$(comm -23 <(seq 0 $((total-1))) <(ever) | tr '\n' ' ')"
+sealed="$(dp_set_minus "$(seq 0 $((total-1)))" "$(ever)")"
 echo "pile: $total block(s), source '$source'"
 echo "  disclosed : $n_out — seq$(dp_ranges "$out")"
 echo "  sealed    : $(printf '%s\n' $sealed | grep -c . || true) — seq$(dp_ranges "$sealed")"
