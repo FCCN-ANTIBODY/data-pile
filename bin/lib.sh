@@ -82,6 +82,23 @@ dp_set_line() {
   ' "$file" > "$tmp" && mv "$tmp" "$file"
 }
 
+# Where the PILE lives — which stops being where the ENGINE lives the moment this repo is
+# mounted. Standing alone, this checkout IS the pile (the template posture, unchanged). Mounted
+# at `.pile-engine/` inside a journal or a node, the pile is the mounting site one level up, and
+# the engine holds only machinery.
+#
+# Detected by the mount NAME, matching how every other engine in the constellation is mounted
+# (.journal-engine, .tell-engine, .atlas-engine, .antidote-engine) — not by hunting for a
+# pile.yml, which would find the engine's own template file and silently operate on the wrong
+# repo. DP_SITE overrides both, for a layout nobody has thought of yet.
+dp_site() { # ENGINE_ROOT
+  if [ -n "${DP_SITE:-}" ]; then printf '%s' "$DP_SITE"; return 0; fi
+  case "$(basename "$1")" in
+    .pile-engine) (cd "$1/.." && pwd);;
+    *)            printf '%s' "$1";;
+  esac
+}
+
 dp_die() { echo "data-pile: $*" >&2; exit 1; }
 dp_log() { echo "data-pile: $*" >&2; }
 

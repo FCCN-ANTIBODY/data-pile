@@ -23,7 +23,8 @@
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 . "$here/lib.sh"
-repo="$(cd "$here/.." && pwd)"
+engine="$(cd "$here/.." && pwd)"
+repo="$(dp_site "$engine")"
 
 dir=""; recipient=""; signkey=""
 files=()

@@ -9,7 +9,8 @@
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 . "$here/lib.sh"
-repo_root="$(cd "$here/.." && pwd)"
+engine="$(cd "$here/.." && pwd)"
+repo_root="$(dp_site "$engine")"
 
 id="${1:?usage: bin/need <id>}"
 f="$repo_root/needs/$id.json"

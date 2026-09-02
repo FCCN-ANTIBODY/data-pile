@@ -21,7 +21,8 @@
 
 here="$(cd "$(dirname "$0")" && pwd)"
 . "$here/lib.sh"
-repo="$(cd "$here/.." && pwd)"
+engine="$(cd "$here/.." && pwd)"
+repo="$(dp_site "$engine")"
 cd "$repo"
 
 only=""; [ "${1:-}" = "--source" ] && only="$2"
