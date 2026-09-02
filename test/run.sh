@@ -328,3 +328,7 @@ if command -v node >/dev/null 2>&1; then
 else
   ok "partial mirror skipped (node absent)"
 fi
+
+echo "[17] prove --seqs: disclosing an arbitrary interior set, not a forward-only tail"
+test/prove-seqs.test.sh >/dev/null 2>&1 || { test/prove-seqs.test.sh; fail "prove --seqs suite failed"; }
+ok "arbitrary disclosure set, ratchet refusal, and the bash/.mjs mirror"

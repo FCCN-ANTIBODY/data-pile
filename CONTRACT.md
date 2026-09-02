@@ -294,4 +294,15 @@ the full result, so the flag can be passed unconditionally by a caller that does
 3. **Decrypt** when you want to read (`bin/decrypt`, needs `PILE_AGE_IDENTITY`).
 4. **Report** from verified state (`bin/report` — aggregation is yours to define; its role as the
    *backing* behind the Atlas-pooled report is sketched in [`docs/lifecycle.md`](docs/lifecycle.md)).
-5. **Prove** if and when you take it public (`bin/prove` — publish a ratchet checkpoint).
+5. **Prove** if and when you take it public (`bin/prove`). Two disclosure shapes, and the feed
+   decides which is available:
+   - `--from N` — a forward-only tail. On a ratchet feed this is the *only* shape possible, because
+     revealing `K_N` necessarily derives `K_{N+1}..`; on a drop feed it reveals each block's own key
+     for `seq >= N`.
+   - `--seqs 0,30-36,41` — an **arbitrary set**, drop feeds only. This is what an interior quote
+     needs: a published excerpt is a handful of blocks from the middle, and everything outside the
+     set stays sealed. Refused on a ratchet feed *with that reason*, rather than silently widened.
+
+   Both write a bundle any key-less party checks with `bin/prove --check`. `--seqs` states what it
+   disclosed (`DISCLOSES 4 of 8 block(s): seq 0,3-5`) because a disclosure that under-reports its
+   own size is the one mistake here that cannot be taken back.
