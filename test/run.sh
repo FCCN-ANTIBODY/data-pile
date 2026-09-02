@@ -340,3 +340,7 @@ if command -v node >/dev/null 2>&1; then
 else
   ok "claim suite skipped (node absent)"
 fi
+
+echo "[20] the disclosure ledger: what has gone out, and what must never"
+test/revealed.test.sh >/dev/null 2>&1 || { test/revealed.test.sh; fail "revealed suite failed"; }
+ok "records without keys, names what is new, refuses a withheld block"
