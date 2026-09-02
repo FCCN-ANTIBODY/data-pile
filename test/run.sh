@@ -344,3 +344,7 @@ fi
 echo "[19] the engine posture: mounted at a site's .pile-engine/, the tools act on the SITE"
 test/mounted.test.sh >/dev/null 2>&1 || { test/mounted.test.sh; fail "mounted engine suite failed"; }
 ok "site resolution, sealing into the site, and the standalone posture unchanged"
+
+echo "[20] the disclosure ledger: what has gone out, and what must never"
+test/revealed.test.sh >/dev/null 2>&1 || { test/revealed.test.sh; fail "revealed suite failed"; }
+ok "records without keys, names what is new, refuses a withheld block"

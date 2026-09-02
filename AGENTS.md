@@ -93,6 +93,11 @@ for a reader holding only some blocks, and reports a distinct sentinel so it can
 full verification), `bin/prove` (commit-and-reveal — a
 key-less party verifies against the signed manifest; this *is* the public-husk backing; `--from` for
 a forward-only tail, `--seqs` for an arbitrary interior set on drop feeds),
+`bin/revealed` (the disclosure ledger — what this pile has ever let out and what it must never,
+kept SEPARATE from the proof bundles because a bundle records a disclosure *by carrying the keys*
+while the ledger is an account of it that survives the bundle being pruned; holds no key material,
+so it is safe to commit. `bin/prove --seqs` consults it: names what is newly going out, and
+REFUSES where a block was deliberately withheld),
 `bin/report` (documented stub — aggregation is deliberately undecided, owner's to define),
 `keys/custody.yml` + `bin/check-custody`.
 

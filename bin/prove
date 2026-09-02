@@ -114,6 +114,26 @@ if [ -n "$seqspec" ]; then
     keysjson="$(jq -c --arg s "$s" --arg k "$kb" '. + {($s): $k}' <<<"$keysjson")"
   done
 
+  # THE LEDGER, consulted before anything is written. Publishing a key is irreversible, so the
+  # only useful moment for a warning is now — after the disclosure exists there is nothing to say.
+  ledger="$dir/reports/revealed.json"
+  if [ -f "$ledger" ]; then
+    forbidden="$(jq -r '.withheld[].seqs' "$ledger" | while read -r r; do dp_expand_seqs "$r"; done | sort -n -u)"
+    clash="$(comm -12 <(printf '%s\n' $seqs) <(printf '%s\n' $forbidden) | tr '\n' ' ')"
+    if [ -n "${clash// /}" ]; then
+      # A REFUSAL, not a warning. This is the editor's "take the face off before it goes
+      # anywhere" — the one case where the tool should not be talked round by a hurried operator.
+      dp_die "seq$(dp_ranges "$clash") is marked WITHHELD in reports/revealed.json and this would disclose it permanently. Clear the mark deliberately if that is really the intent."
+    fi
+    ever="$(jq -r '.events[].seqs' "$ledger" | while read -r r; do dp_expand_seqs "$r"; done | sort -n -u)"
+    fresh="$(comm -23 <(printf '%s\n' $seqs) <(printf '%s\n' $ever) | tr '\n' ' ')"
+    if [ -n "${fresh// /}" ]; then
+      dp_log "NEW: seq$(dp_ranges "$fresh") has never been disclosed before — publishing this cannot be undone"
+    else
+      dp_log "nothing new: every block named here has been disclosed before"
+    fi
+  fi
+
   mkdir -p "$dir/reports"
   bundle="${out:-$dir/reports/proof-$source-seqs-$(printf '%s' "$seqspec" | tr ',' '+').json}"
   jq -n --arg src "$source" --argjson seqs "$(printf '%s' "$seqs" | jq -Rs 'split("\n") | map(select(length>0) | tonumber)')" \
@@ -124,6 +144,8 @@ if [ -n "$seqspec" ]; then
   held="$(printf '%s' "$seqs" | tr '\n' ' ')"
   dp_log "wrote $bundle"
   dp_log "DISCLOSES $(printf '%s' "$seqs" | grep -c .) of $total block(s): seq$(dp_ranges "$held") — every other block stays sealed"
+  # Record it WITHOUT the keys, so the pile still knows what went out if the bundle is pruned.
+  "$here/revealed" --dir "$dir" --source "$source" --record "$(dp_ranges "$held")" --bundle "$bundle" 2>/dev/null || true
   echo "$bundle"
   exit 0
 fi

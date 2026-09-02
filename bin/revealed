@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+# The disclosure ledger — what this pile has ever let out, and what it must never let out.
+#
+#   bin/revealed [--dir DIR] [--source NAME]            show the ledger
+#   bin/revealed --withhold SPEC --reason TEXT          mark blocks that must never be disclosed
+#   bin/revealed --record SPEC --bundle PATH            append a disclosure (bin/prove calls this)
+#
+# WHY A LEDGER SEPARATE FROM THE BUNDLES. A proof bundle already records what was revealed — but
+# it records it *by carrying the keys*, so it is the disclosure itself rather than an account of
+# it. Keeping the account separate means the pile still knows what went out after the bundles are
+# pruned, moved, or never committed. The ledger holds NO KEYS and nothing secret: every fact in it
+# is about material that is already public, so it is safe to commit and safe to read.
+#
+# WHAT IT IS FOR. Disclosure is per-piece and published keys stay published, so a later piece can
+# widen an earlier redaction permanently, and withdrawal cannot reach a key already out. The
+# ledger cannot undo that — nothing can. It can make it hard to do by accident: name what is newly
+# going out, and refuse outright where a block was deliberately withheld.
+#
+# WHAT IT CANNOT DO. Nothing here helps a payload that was disclosed whole; there is no redaction
+# to protect. It also does not weaken the stronger guarantee: a block whose key was never wrapped
+# is unopenable by everyone including the owner, which is an absence rather than a rule and needs
+# no ledger to hold it. This is the rule-shaped half, for the far commoner case where the owner
+# legitimately holds everything and is deciding what a reader may see.
+set -euo pipefail
+here="$(cd "$(dirname "$0")" && pwd)"
+. "$here/lib.sh"
+
+dir="."; source="drop"; withhold=""; reason=""; record=""; bundle=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --dir) dir="$2"; shift 2;;
+    --source) source="$2"; shift 2;;
+    --withhold) withhold="$2"; shift 2;;
+    --reason) reason="$2"; shift 2;;
+    --record) record="$2"; shift 2;;
+    --bundle) bundle="$2"; shift 2;;
+    *) dp_die "revealed: unknown arg: $1";;
+  esac
+done
+
+# dp_ranges returns a LEADING SPACE on purpose, so `seq$(dp_ranges ...)` reads as "seq 2-3" in a
+# message. That is fine for prose and poison for storage — dp_expand_seqs rejects " 2-3" as
+# malformed, so a stored spec with the space would be written happily and refuse to be read back.
+# Trim at the boundary between the two.
+trim() { printf '%s' "${1#"${1%%[![:space:]]*}"}"; }
+
+manifest="$dir/inbox/manifest.json"
+[ -f "$manifest" ] || dp_die "no manifest at $manifest"
+total="$(jq '.entries | length' "$manifest")"
+mkdir -p "$dir/reports"
+ledger="$dir/reports/revealed.json"
+[ -f "$ledger" ] || jq -n --arg s "$source" --arg d "$(jq -r '.head.digest' "$manifest")" \
+  '{schema:"data-pile.revealed/v1", source:$s, manifest_digest:$d, events:[], withheld:[]}' > "$ledger"
+
+# Every seq ever disclosed, and every seq marked never-to-disclose, as ascending lists.
+ever()      { jq -r '.events[].seqs'   "$ledger" | while read -r r; do dp_expand_seqs "$r"; done | sort -n -u; }
+forbidden() { jq -r '.withheld[].seqs' "$ledger" | while read -r r; do dp_expand_seqs "$r"; done | sort -n -u; }
+
+if [ -n "$withhold" ]; then
+  [ -n "$reason" ] || dp_die "revealed: --withhold needs a --reason (an unexplained redaction is indistinguishable from a mistake)"
+  seqs="$(dp_expand_seqs "$withhold")"
+  # Refuse to mark something already public. Saying it is withheld would be a false promise, and
+  # the ledger's only value is that its statements are true.
+  already="$(comm -12 <(printf '%s\n' $seqs) <(ever) | tr '\n' ' ')"
+  [ -n "${already// /}" ] && dp_die "revealed: seq$(dp_ranges "$already") already disclosed — marking it withheld now would be a promise this pile cannot keep"
+  jq --arg r "$(trim "$(dp_ranges "$(printf '%s ' $seqs)")")" --arg why "$reason" --arg at "$(date -u +%FT%TZ)" \
+     '.withheld += [{seqs:$r, reason:$why, at:$at}]' "$ledger" > "$ledger.tmp" && mv "$ledger.tmp" "$ledger"
+  dp_log "withheld seq$(dp_ranges "$(printf '%s ' $seqs)") — $reason"
+  exit 0
+fi
+
+if [ -n "$record" ]; then
+  jq --arg r "$(trim "$record")" --arg b "${bundle:-}" --arg at "$(date -u +%FT%TZ)" \
+     '.events += [{seqs:$r, bundle:$b, at:$at}]' "$ledger" > "$ledger.tmp" && mv "$ledger.tmp" "$ledger"
+  exit 0
+fi
+
+out="$(ever | tr '\n' ' ')"; hid="$(forbidden | tr '\n' ' ')"
+n_out="$(printf '%s\n' $out | grep -c . || true)"
+sealed="$(comm -23 <(seq 0 $((total-1))) <(ever) | tr '\n' ' ')"
+echo "pile: $total block(s), source '$source'"
+echo "  disclosed : $n_out — seq$(dp_ranges "$out")"
+echo "  sealed    : $(printf '%s\n' $sealed | grep -c . || true) — seq$(dp_ranges "$sealed")"
+[ -n "${hid// /}" ] && echo "  WITHHELD  : seq$(dp_ranges "$hid") — must never be disclosed"
+jq -r '.withheld[] | "              " + .seqs + "  " + .reason' "$ledger"

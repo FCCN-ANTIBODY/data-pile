@@ -33,6 +33,8 @@
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 . "$here/lib.sh"
+engine="$(cd "$here/.." && pwd)"   # where the machinery lives
+site="$(dp_site "$engine")"        # where the PILE lives — the same thing, unless mounted
 
 cmd="${1:-}"; shift || true
 id=""; scope=""; recipient=""; keygen=0; owner=""; name=""; dir=""
@@ -93,6 +95,19 @@ EOF
 # Offline and idempotent — the pure half `create` calls after the clone, and tests call directly.
 fill() {
   [ -n "$dir" ] || dp_die "pile-new fill: --dir is required"
+  # A MOUNTING SITE legitimately has no pile.yml yet: it is a journal that mounts this engine at
+  # .pile-engine/ and is becoming a pile, so the template it needs is the engine's own. Install it
+  # once, here, rather than making an operator copy a file they did not know about — that step
+  # existed only in someone's head and it is exactly what a trial run found missing.
+  #
+  # Deliberately narrow: only when the engine is MOUNTED (site is not the engine) and only when
+  # the site has nothing. Standing alone, a missing pile.yml still means "not a data-pile
+  # checkout", and the refusal is the safety it always was — `fill` must not quietly adopt an
+  # arbitrary directory.
+  if [ ! -f "$dir/pile.yml" ] && [ "$site" != "$engine" ] && [ -f "$engine/pile.yml" ]; then
+    cp "$engine/pile.yml" "$dir/pile.yml"
+    dp_log "installed pile.yml from the mounted engine — $dir is becoming a pile"
+  fi
   [ -f "$dir/pile.yml" ] || dp_die "pile-new fill: $dir has no pile.yml (not a data-pile checkout?)"
   local recip="$recipient"
   if [ "$keygen" = 1 ]; then
