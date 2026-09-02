@@ -24,6 +24,21 @@ can read what it holds — until the owner chooses to prove it, publicly and ver
 4. **The law, then the wire.** `CONSTITUTION.md` binds; `CONTRACT.md` covers the interface with
    Tell (and the provisioner attestation).
 
+## Two postures: the template, and the engine
+
+This repo is usable **standing alone** (fork it; the checkout IS the pile — the original posture,
+unchanged) or **mounted at a site's `.pile-engine/`**, where the pile is the mounting site one
+level up and this repo holds only machinery. The second exists because a journal that keeps its
+own exhibits *is* a pile, and a pile whose verifier is not inside it fails the replication test —
+a stranger who clones the journal should be able to run `bin/verify` on it without first learning
+that a second repository exists.
+
+`dp_site` in `bin/lib.sh` resolves which is which, by the **mount name** (`.pile-engine`, matching
+every other engine in the constellation) rather than by hunting for a `pile.yml` — that hunt would
+find the engine's own template file and quietly operate on the wrong repository. `DP_SITE`
+overrides. When mounted, `bin/check-custody` deliberately straddles: the custody declaration and
+the workflows reading secrets are the **site's**, the bins being audited are the **engine's**.
+
 ## The offline origin is the destination
 
 Capability is migrating off GitHub and down to the operator's device — the anecdote.channel PWA,

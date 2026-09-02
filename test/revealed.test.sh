@@ -72,4 +72,19 @@ DP_IDENTITY_FILE="$work/id" bin/prove --dir "$work" --source drop --seqs 8,11 >/
   || fail "could not disclose around the withheld region"
 ok "8 and 11 disclose fine with 9-10 held back"
 
+# The seq sets are compared NUMERICALLY. A comm-based implementation needs LEXICAL order, where
+# 10 sorts before 2 — and BSD comm tolerates the mismatch while GNU comm refuses, so the bug
+# passes on a mac and fails in CI. Pin the multi-digit cases explicitly rather than trusting a
+# range to happen to cross the boundary.
+echo "[10] multi-digit seqs compare numerically, not lexically"
+[ "$(dp_set_minus "$(seq 0 11)" "2 3")" = "0 1 4 5 6 7 8 9 10 11 " ] || fail "set-minus mis-ordered past 9"
+[ "$(dp_set_and "8 9 10 11" "10 11 12")" = "10 11 " ] || fail "set-and mis-matched past 9"
+# 11 is already out (step 9); 1 never has been. If the two were conflated, disclosing 1 would
+# report "nothing new" — which is the exact silent wrong answer a lexical comparison gives.
+msg="$(says env DP_IDENTITY_FILE=$work/id bin/prove --dir "$work" --source drop --seqs 1)"
+case "$msg" in *"NEW: seq 1"*) ;; *) fail "seq 1 was confused with 11: $msg";; esac
+out="$(says bin/revealed --dir "$work")"
+case "$out" in *"seq 0,7,9-10"*) ;; *) fail "sealed set wrong with multi-digit members: $out";; esac
+ok "1 and 11 are distinct; the sealed set spans single and double digits"
+
 echo "PASS: the disclosure ledger"

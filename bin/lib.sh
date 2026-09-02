@@ -82,6 +82,34 @@ dp_set_line() {
   ' "$file" > "$tmp" && mv "$tmp" "$file"
 }
 
+# Where the PILE lives — which stops being where the ENGINE lives the moment this repo is
+# mounted. Standing alone, this checkout IS the pile (the template posture, unchanged). Mounted
+# at `.pile-engine/` inside a journal or a node, the pile is the mounting site one level up, and
+# the engine holds only machinery.
+#
+# Detected by the mount NAME, matching how every other engine in the constellation is mounted
+# (.journal-engine, .tell-engine, .atlas-engine, .antidote-engine) — not by hunting for a
+# pile.yml, which would find the engine's own template file and silently operate on the wrong
+# repo. DP_SITE overrides both, for a layout nobody has thought of yet.
+dp_site() { # ENGINE_ROOT
+  if [ -n "${DP_SITE:-}" ]; then printf '%s' "$DP_SITE"; return 0; fi
+  case "$(basename "$1")" in
+    .pile-engine) (cd "$1/.." && pwd);;
+    *)            printf '%s' "$1";;
+  esac
+}
+
+# Set operations on seq lists. NOT `comm`: comm requires LEXICAL order, while everything here
+# produces NUMERIC order (`seq`, `sort -n`), and past 9 those disagree — 10 sorts before 2. BSD
+# comm tolerates the mismatch silently and GNU comm refuses, so a comm-based version passes on a
+# mac and fails in CI, which is the worst way to learn it. awk needs no ordering at all.
+dp_set_minus() { # "A LIST" "B LIST"  -> members of A not in B, in A's order
+  awk 'NR==FNR { b[$1]; next } !($1 in b)' <(printf '%s\n' $2) <(printf '%s\n' $1) | tr '\n' ' '
+}
+dp_set_and() {   # "A LIST" "B LIST"  -> members of A also in B, in A's order
+  awk 'NR==FNR { b[$1]; next } ($1 in b)'  <(printf '%s\n' $2) <(printf '%s\n' $1) | tr '\n' ' '
+}
+
 dp_die() { echo "data-pile: $*" >&2; exit 1; }
 dp_log() { echo "data-pile: $*" >&2; }
 
