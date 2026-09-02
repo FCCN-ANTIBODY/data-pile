@@ -34,6 +34,16 @@ dp_entries_digest() { # MANIFEST_FILE
   jq -cS '.entries' "$1" | tr -d '\n' | sha256sum | cut -d' ' -f1
 }
 
+# Collapse a space-separated ascending seq list into " 3-9,14,20-21" — so a partial
+# verification can name every unchecked entry without printing 100k numbers.
+dp_ranges() { # "3 4 5 7"
+  printf '%s' "$1" | tr ' ' '\n' | awk '
+    NF { if (s == "") { s = e = $1 }
+         else if ($1 == e + 1) { e = $1 }
+         else { out = out sep (s == e ? s : s "-" e); sep = ","; s = e = $1 } }
+    END { if (s != "") out = out sep (s == e ? s : s "-" e); if (out != "") print " " out }'
+}
+
 dp_die() { echo "data-pile: $*" >&2; exit 1; }
 dp_log() { echo "data-pile: $*" >&2; }
 

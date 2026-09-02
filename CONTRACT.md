@@ -258,10 +258,38 @@ Because the **signed manifest** is the integrity anchor, the transport is untrus
 matter that the bytes arrived over a plain public fetch. `bin/verify` rejects anything that violates
 the above and fails closed; a failed `ingest.yml` run is the alarm.
 
+### Partial holdings — `bin/verify --partial`
+
+An ingesting pile holds every block, so absent bytes are a failed delivery and stay fatal. A
+**reader** may legitimately hold only some: a published excerpt, an ejected piece, a player that has
+fetched eight chunks of ninety-three. `--partial` (`verifyFeed({ partial: true })`) serves that
+reader by verifying a strictly **smaller claim** — it is not a relaxed verifier, and it does not
+lower the bar for anyone who holds the whole feed.
+
+The manifest splits cleanly into what needs bytes and what does not:
+
+| checked | needs block bytes? | what it establishes |
+| --- | --- | --- |
+| head digest over canonical entries | no | the entries array is the one that was signed |
+| signature over that digest | no | the registered signer stands behind it |
+| `seq` order + `prev_hash` linkage | no | the order is the signed order; nothing inserted or removed |
+| `ratchet_pub` shape, `key` named (drop) | no | every entry commits to a key and names its wrapper |
+| block hash vs `this_hash` | **yes**, per block held | *these* bytes are the block committed at seq K |
+
+The first four together mean *"the signer committed to this exact ordered list of N block hashes."*
+The fifth is checked once per block the reader actually has. **Both halves together are exactly the
+full check**, so fetching lazily gives up nothing — it defers.
+
+A partial run MUST NOT be reportable as a full one. `bin/verify --partial` prints
+`verified-partial <held>/<n>` (never the bare `verified`) and logs the unchecked seqs as ranges;
+`verifyFeed` returns `complete`, `held` and `notHeld`. Holding every block under `--partial` reports
+the full result, so the flag can be passed unconditionally by a caller that does not know yet.
+
 ## Producer-side checklist (lives in the pile repo)
 
 1. **Verify** every delivery (`bin/verify`) — chain continuity, signature against the registered
-   signer, and ratchet commitments.
+   signer, and ratchet commitments. A producer always holds the whole feed, so it never passes
+   `--partial`; that flag is for readers (see "Partial holdings" above).
 2. **Ingest** verified blocks into owner-side state (`bin/ingest`).
 3. **Decrypt** when you want to read (`bin/decrypt`, needs `PILE_AGE_IDENTITY`).
 4. **Report** from verified state (`bin/report` — aggregation is yours to define; its role as the
