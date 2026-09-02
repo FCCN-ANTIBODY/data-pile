@@ -7,6 +7,8 @@
 //
 //   prove.mjs --check FILE [--dir DIR]           PUBLIC: verify a proof bundle against the signed manifest
 //   prove.mjs --from N [--dir DIR] [--source S]   OWNER:  derive a checkpoint/keys bundle (needs the identity)
+//   prove.mjs --seqs SPEC [--out PATH]            OWNER:  disclose an ARBITRARY set ("0,30-36,41"), drop feeds
+//                                                         only — an interior quote, not a forward-only tail
 //
 // The crypto (data-pile/bin/lib.sh):
 //   ratchet:     K_{n+1} = sha256("ratchet:" || K_n)     commit: ratchet_pub = sha256("pub:" || K_n)
@@ -35,13 +37,44 @@ async function decBlock(khex, data) {
 
 // ---- args ------------------------------------------------------------------------------------------
 const args = process.argv.slice(2);
-let dir = ".", source = "tell", from = "", check = "";
+let dir = ".", source = "tell", from = "", check = "", seqspec = "", out = "";
 for (let i = 0; i < args.length; i++) {
   if (args[i] === "--dir") dir = args[++i];
   else if (args[i] === "--source") source = args[++i];
   else if (args[i] === "--from") from = args[++i];
+  else if (args[i] === "--seqs") seqspec = args[++i];
+  else if (args[i] === "--out") out = args[++i];
   else if (args[i] === "--check") check = args[++i];
   else die("unknown arg: " + args[i]);
+}
+if (from && seqspec) die("--from and --seqs are alternatives, not a pair");
+
+// Mirrors dp_expand_seqs in bin/lib.sh: "0,30-36,41" -> ascending unique. Refuses malformed
+// input rather than disclosing a guess — a typo here reveals or withholds the wrong block.
+function expandSeqs(spec) {
+  const seen = new Set();
+  for (const part of String(spec).split(",")) {
+    const p = part.trim();
+    if (!p) continue;
+    let m;
+    if ((m = /^(\d+)$/.exec(p))) seen.add(Number(m[1]));
+    else if ((m = /^(\d+)-(\d+)$/.exec(p))) {
+      const [a, b] = [Number(m[1]), Number(m[2])];
+      if (b < a) die(`bad --seqs spec: descending range "${p}"`);
+      for (let i = a; i <= b; i++) seen.add(i);
+    } else die(`bad --seqs spec: "${p}" is not N or N-M`);
+  }
+  return [...seen].sort((a, b) => a - b);
+}
+// Mirrors dp_ranges: [0,3,4,5] -> "0,3-5", for stating a disclosure without printing every seq.
+function toRanges(xs) {
+  const out = []; let s = null, e = null;
+  for (const x of xs) {
+    if (s === null) { s = e = x; } else if (x === e + 1) { e = x; }
+    else { out.push(s === e ? `${s}` : `${s}-${e}`); s = e = x; }
+  }
+  if (s !== null) out.push(s === e ? `${s}` : `${s}-${e}`);
+  return out.join(",");
 }
 const inbox = join(dir, "inbox"), manifestPath = join(inbox, "manifest.json");
 let manifest;
@@ -59,7 +92,7 @@ if (check) {
       if (manifest.entries[s].ratchet_pub !== "sha256:" + (await ratchetPub(kb))) die(`revealed key fails at seq ${s} (commitment mismatch)`);
       await decBlock(kb, new Uint8Array(readFileSync(join(inbox, manifest.entries[s].block))));  // must be readable
     }
-    log(`OK: proof verifies ${seqs.length} drop block(s) against the signed manifest`);
+    log(`OK: proof verifies ${seqs.length} drop block(s) against the signed manifest — seq ${toRanges(seqs)}`);
     console.log("proven"); process.exit(0);
   }
 
@@ -74,8 +107,38 @@ if (check) {
   console.log("proven"); process.exit(0);
 }
 
+// ---- --seqs (owner, drop only) ---------------------------------------------------------------------
+if (seqspec) {
+  const total = manifest.entries.length;
+  const seqs = expandSeqs(seqspec);
+  if (!seqs.length) die(`--seqs '${seqspec}' names no blocks`);
+  for (const s of seqs) {
+    if (s >= total) die(`--seqs names seq ${s} but the feed has ${total} block(s) (0..${total - 1})`);
+    // A ratchet entry has no per-block key file. Revealing its K_n derives every later block,
+    // so an interior-only disclosure is a promise that feed shape cannot keep.
+    if (!manifest.entries[s].key) {
+      die(`seq ${s} carries no per-block key: this is a ratchet feed, where --seqs cannot be honoured (revealing K_${s} also reveals ${s + 1}..). Use --from.`);
+    }
+  }
+  const identity = readIdentity();
+  const blockKeys = {};
+  for (const s of seqs) {
+    blockKeys[String(s)] = dec.decode(await ageOpen(identity,
+      new Uint8Array(readFileSync(join(inbox, manifest.entries[s].key))))).trim();
+  }
+  mkdirSync(join(dir, "reports"), { recursive: true });
+  const p = out || join(dir, "reports", `proof-${source}-seqs-${seqspec.replace(/,/g, "+")}.json`);
+  writeFileSync(p, JSON.stringify({
+    source, seqs, block_keys: blockKeys, manifest_digest: manifest.head.digest,
+    note: "Publish this to prove the named drop blocks. Anyone: bin/prove --check this-file. Blocks are independent; every block NOT named here stays sealed.",
+  }, null, 2) + "\n");
+  log(`wrote ${p}`);
+  log(`DISCLOSES ${seqs.length} of ${total} block(s): seq ${toRanges(seqs)} — every other block stays sealed`);
+  console.log(p); process.exit(0);
+}
+
 // ---- --from (owner) --------------------------------------------------------------------------------
-if (!from) die("specify --from N or --check FILE");
+if (!from) die("specify --from N, --seqs SPEC, or --check FILE");
 from = Number(from);
 const identity = readIdentity();
 mkdirSync(join(dir, "reports"), { recursive: true });

@@ -44,6 +44,24 @@ dp_ranges() { # "3 4 5 7"
     END { if (s != "") out = out sep (s == e ? s : s "-" e); if (out != "") print " " out }'
 }
 
+# Expand "0,30-36,41" into ascending unique seqs, one per line — the inverse of dp_ranges.
+# Refuses malformed input rather than silently dropping it: a disclosure spec is the one place
+# a typo must not quietly reveal (or withhold) the wrong block.
+dp_expand_seqs() { # SPEC
+  printf '%s' "$1" | tr ',' '\n' | awk '
+    function bad(m) { print "data-pile: bad --seqs spec: " m > "/dev/stderr"; exit 1 }
+    NF == 0 { next }
+    {
+      if ($0 ~ /^[0-9]+$/) { print $0 + 0 }
+      else if ($0 ~ /^[0-9]+-[0-9]+$/) {
+        split($0, r, "-")
+        if (r[2] + 0 < r[1] + 0) bad("descending range \"" $0 "\"")
+        for (i = r[1] + 0; i <= r[2] + 0; i++) print i
+      }
+      else bad("\"" $0 "\" is not N or N-M")
+    }' | sort -n -u
+}
+
 dp_die() { echo "data-pile: $*" >&2; exit 1; }
 dp_log() { echo "data-pile: $*" >&2; }
 

@@ -76,7 +76,8 @@ port fills on-device), `bin/pile-poll` (reserve a poll's SHOWN anchor on the tan
 `CONTRACT.md` "The poll anchor"), `bin/ingest` + `bin/verify` (pull + verify a signed feed; `--partial` verifies the smaller claim
 for a reader holding only some blocks, and reports a distinct sentinel so it can never pass as a
 full verification), `bin/prove` (commit-and-reveal — a
-key-less party verifies against the signed manifest; this *is* the public-husk backing),
+key-less party verifies against the signed manifest; this *is* the public-husk backing; `--from` for
+a forward-only tail, `--seqs` for an arbitrary interior set on drop feeds),
 `bin/report` (documented stub — aggregation is deliberately undecided, owner's to define),
 `keys/custody.yml` + `bin/check-custody`.
 

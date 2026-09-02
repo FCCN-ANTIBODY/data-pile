@@ -7,6 +7,13 @@
 #       seq>=N and confirm they match the signed manifest. Forward-only: K_N never
 #       reveals blocks before N.
 #
+#   bin/prove --seqs SPEC [--dir DIR] [--source NAME] [--out PATH]
+#       OWNER, DROP FEEDS ONLY: disclose an ARBITRARY set of blocks — "0,30-36,41" — rather
+#       than a forward-only tail. This is what an interior quote needs: a published excerpt
+#       of a recording is a handful of chunks from the middle, and everything outside the
+#       set stays sealed. Refused on a ratchet feed, where it is not expressible: revealing
+#       K_n necessarily derives K_{n+1}.., so "interior only" cannot be honoured there.
+#
 #   bin/prove --check FILE [--dir DIR]
 #       PUBLIC: given a published proof bundle and a (key-less) checkout, derive forward
 #       from the checkpoint, decrypt blocks, and verify each against the signed manifest.
@@ -21,16 +28,19 @@
 here="$(cd "$(dirname "$0")" && pwd)"
 . "$here/lib.sh"
 
-dir="."; source="tell"; from=""; check=""
+dir="."; source="tell"; from=""; check=""; seqspec=""; out=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --dir) dir="$2"; shift 2;;
     --source) source="$2"; shift 2;;
     --from) from="$2"; shift 2;;
+    --seqs) seqspec="$2"; shift 2;;
+    --out) out="$2"; shift 2;;
     --check) check="$2"; shift 2;;
     *) dp_die "unknown arg: $1";;
   esac
 done
+[ -n "$from" ] && [ -n "$seqspec" ] && dp_die "--from and --seqs are alternatives, not a pair"
 inbox="$dir/inbox"; manifest="$inbox/manifest.json"
 [ -f "$manifest" ] || dp_die "no manifest at $manifest"
 
@@ -39,7 +49,7 @@ if [ -n "$check" ]; then
   cp_from="$(jq -r '.from_seq' "$check")"
   if [ "$(jq 'has("block_keys")' "$check")" = "true" ]; then
     # drop-feed bundle: independent per-block keys, each checked against its own commitment.
-    n=0
+    n=0; proved=""
     for s in $(jq -r '.block_keys | keys_unsorted[]' "$check" | sort -n); do
       kb="$(jq -r --arg s "$s" '.block_keys[$s]' "$check")"
       want="$(jq -r ".entries[$s].ratchet_pub" "$manifest")"
@@ -47,9 +57,9 @@ if [ -n "$check" ]; then
       [ "$want" = "$got" ] || dp_die "revealed key fails at seq $s (commitment mismatch)"
       block="$(jq -r ".entries[$s].block" "$manifest")"
       dp_dec "$kb" "$inbox/$block" "-" >/dev/null || dp_die "decrypt failed at seq $s"
-      n=$((n+1))
+      n=$((n+1)); proved="$proved $s"
     done
-    dp_log "OK: proof verifies $n drop block(s) against the signed manifest"
+    dp_log "OK: proof verifies $n drop block(s) against the signed manifest — seq$(dp_ranges "$proved")"
     echo "proven"
     exit 0
   fi
@@ -70,12 +80,53 @@ if [ -n "$check" ]; then
   exit 0
 fi
 
-[ -n "$from" ] || dp_die "specify --from N or --check FILE"
+[ -n "$from" ] || [ -n "$seqspec" ] || dp_die "specify --from N, --seqs SPEC, or --check FILE"
+
+# Validate --seqs BEFORE asking for the identity: none of this needs a secret, and a caller with a
+# malformed spec or the wrong feed shape deserves that reason rather than "no identity".
+# (bin/prove.mjs validates in this order too — the mirror is asserted in test/prove-seqs.test.sh.)
+if [ -n "$seqspec" ]; then
+  total="$(jq '.entries | length' "$manifest")"
+  seqs="$(dp_expand_seqs "$seqspec")" || dp_die "could not parse --seqs '$seqspec'"
+  [ -n "$seqs" ] || dp_die "--seqs '$seqspec' names no blocks"
+  for s in $seqs; do
+    [ "$s" -lt "$total" ] || dp_die "--seqs names seq $s but the feed has $total block(s) (0..$((total-1)))"
+    kf="$(jq -r ".entries[$s].key // empty" "$manifest")"
+    # A ratchet entry has no per-block key file. Revealing its K_n would derive every later
+    # block too, so an interior-only disclosure is a promise this feed shape cannot keep.
+    [ -n "$kf" ] || dp_die "seq $s carries no per-block key: this is a ratchet feed, where --seqs cannot be honoured (revealing K_$s also reveals $((s+1))..). Use --from."
+  done
+
+fi
+
 idfile=""
 if [ -n "${DP_IDENTITY_FILE:-}" ]; then idfile="$DP_IDENTITY_FILE"
 elif [ -n "${PILE_AGE_IDENTITY:-}" ]; then idfile="$(mktemp)"; trap 'rm -f "$idfile"' EXIT
   printf '%s\n' "$PILE_AGE_IDENTITY" > "$idfile"
 else dp_die "no identity (set PILE_AGE_IDENTITY or DP_IDENTITY_FILE)"; fi
+
+# --seqs: an arbitrary disclosed set. Drop feeds only, and refused loudly anywhere else.
+if [ -n "$seqspec" ]; then
+  keysjson="{}"
+  for s in $seqs; do
+    kf="$(jq -r ".entries[$s].key" "$manifest")"
+    kb="$(age -d -i "$idfile" "$inbox/$kf")" || dp_die "could not unwrap $kf (wrong identity?)"
+    keysjson="$(jq -c --arg s "$s" --arg k "$kb" '. + {($s): $k}' <<<"$keysjson")"
+  done
+
+  mkdir -p "$dir/reports"
+  bundle="${out:-$dir/reports/proof-$source-seqs-$(printf '%s' "$seqspec" | tr ',' '+').json}"
+  jq -n --arg src "$source" --argjson seqs "$(printf '%s' "$seqs" | jq -Rs 'split("\n") | map(select(length>0) | tonumber)')" \
+        --argjson keys "$keysjson" --arg dg "$(jq -r '.head.digest' "$manifest")" '
+    { source:$src, seqs:$seqs, block_keys:$keys, manifest_digest:$dg,
+      note:"Publish this to prove the named drop blocks. Anyone: bin/prove --check this-file. Blocks are independent; every block NOT named here stays sealed." }' \
+    > "$bundle"
+  held="$(printf '%s' "$seqs" | tr '\n' ' ')"
+  dp_log "wrote $bundle"
+  dp_log "DISCLOSES $(printf '%s' "$seqs" | grep -c .) of $total block(s): seq$(dp_ranges "$held") — every other block stays sealed"
+  echo "$bundle"
+  exit 0
+fi
 
 # Drop feed (entries carry `key` files): reveal each block's own Kb for seq>=from.
 if [ "$(jq --argjson f "$from" '.entries[$f].key // empty | length > 0' "$manifest")" = "true" ]; then
