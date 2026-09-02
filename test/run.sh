@@ -332,3 +332,11 @@ fi
 echo "[17] prove --seqs: disclosing an arbitrary interior set, not a forward-only tail"
 test/prove-seqs.test.sh >/dev/null 2>&1 || { test/prove-seqs.test.sh; fail "prove --seqs suite failed"; }
 ok "arbitrary disclosure set, ratchet refusal, and the bash/.mjs mirror"
+
+echo "[18] the claim: an unclaimed pile is inert, and only the recipient may leave the device"
+if command -v node >/dev/null 2>&1; then
+  node test/claim.test.mjs >/dev/null 2>&1 || { node test/claim.test.mjs; fail "claim suite failed"; }
+  ok "drop-pack refuses an unclaimed pile; claim-request cannot carry an identity"
+else
+  ok "claim suite skipped (node absent)"
+fi
