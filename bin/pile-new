@@ -103,12 +103,13 @@ fill() {
     # The identity leaves this function ONLY as the path exported for create's secret-install.
     PILE_NEW_IDENTITY_FILE="$idfile"
   fi
-  sed -i "s|^id: .*|id: \"$id\"|" "$dir/pile.yml"
-  sed -i "s|^scope: .*|scope: \"$scope\"|" "$dir/pile.yml"
-  sed -i "s|^age_recipient: .*|age_recipient: \"$recip\"|" "$dir/pile.yml"
-  [ -n "$repo_slug" ] && [ -n "$owner" ] && sed -i "s|^repo_url: .*|repo_url: \"https://github.com/$repo_slug\"|" "$dir/pile.yml"
-  [ -n "$source_url" ] && sed -i "0,/^    url: .*/s||    url: \"$source_url\"|" "$dir/pile.yml"
-  [ -n "$signer" ] && sed -i "0,/^    signer: .*/s||    signer: \"$signer\"|" "$dir/pile.yml"
+  dp_set_line "$dir/pile.yml" "id: "            "id: \"$id\""
+  dp_set_line "$dir/pile.yml" "scope: "         "scope: \"$scope\""
+  dp_set_line "$dir/pile.yml" "age_recipient: " "age_recipient: \"$recip\""
+  [ -n "$repo_slug" ] && [ -n "$owner" ] && dp_set_line "$dir/pile.yml" "repo_url: " "repo_url: \"https://github.com/$repo_slug\""
+  # sources[] is a list: only the FIRST entry's keys are filled, the rest are the operator's.
+  [ -n "$source_url" ] && dp_set_line "$dir/pile.yml" "    url: "    "    url: \"$source_url\"" first
+  [ -n "$signer" ]     && dp_set_line "$dir/pile.yml" "    signer: " "    signer: \"$signer\"" first
   mkdir -p "$dir/keys"
   printf '%s\n' "$recip" > "$dir/keys/pile.age.pub"
   if [ -n "$provisioner" ] && ! grep -q '^provisioner:' "$dir/pile.yml"; then
