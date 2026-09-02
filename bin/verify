@@ -8,6 +8,15 @@
 #   --source  feed source name (default: tell). `drop` selects channel 2 (docs/transfer.md §B):
 #             trust root keys/drop.signers, signature namespace `data-pile-drop`, and a
 #             per-entry age-wrapped key file — its own verifier, not a relaxed one.
+#   --partial A reader who holds only SOME blocks (a disclosed excerpt, an ejected piece).
+#             An absent block becomes "not held" instead of fatal; everything checkable
+#             without the bytes stays fatal. This is NOT a relaxed verifier — it verifies a
+#             strictly smaller claim, and says so:
+#               without any block bytes  -> "the signer committed to this exact ordered list
+#                                            of N block hashes"   (digest + signature + chain)
+#               per block actually held  -> "these bytes are the block committed at seq K"
+#             Prints `verified-partial H/N`, never `verified`, so a caller can never mistake
+#             one for the other. Holding every block under --partial reports the full result.
 #
 # Trust env (be explicit, fail closed):
 #   DP_ALLOW_UNSIGNED=1   skip the signature check (only when ssh-keygen or the signers
@@ -17,12 +26,13 @@ here="$(cd "$(dirname "$0")" && pwd)"
 . "$here/lib.sh"
 repo="$(cd "$here/.." && pwd)"
 
-dir="."; source="tell"; signers=""
+dir="."; source="tell"; signers=""; partial=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --dir) dir="$2"; shift 2;;
     --source) source="$2"; shift 2;;
     --signers) signers="$2"; shift 2;;
+    --partial) partial=1; shift;;
     *) dp_die "unknown arg: $1";;
   esac
 done
@@ -67,6 +77,7 @@ fi
 n="$(jq '.entries | length' "$manifest")"
 prev="null"
 i=0
+held=0; unheld=""
 while [ "$i" -lt "$n" ]; do
   seq="$(jq -r ".entries[$i].seq" "$manifest")"
   block="$(jq -r ".entries[$i].block" "$manifest")"
@@ -74,22 +85,43 @@ while [ "$i" -lt "$n" ]; do
   ph="$(jq -r ".entries[$i].prev_hash" "$manifest")"
   rp="$(jq -r ".entries[$i].ratchet_pub" "$manifest")"
 
+  # Checkable from the manifest alone — these stay fatal in every mode, because the signed
+  # digest covers them and a reader holding no bytes at all can still be lied to here.
   [ "$seq" = "$i" ] || dp_die "entry $i out of order (seq=$seq)"
   [ "$ph" = "$prev" ] || dp_die "broken chain at seq $seq (prev_hash=$ph expected=$prev)"
-  [ -f "$inbox/$block" ] || dp_die "missing block file $block at seq $seq"
-  got="sha256:$(dp_sha256_file "$inbox/$block")"
-  [ "$got" = "$this" ] || dp_die "block $block tampered at seq $seq ($got != $this)"
   printf '%s' "$rp" | grep -Eq '^sha256:[0-9a-f]{64}$' || dp_die "bad ratchet_pub at seq $seq"
+  kf=""
   if [ "$source" = "drop" ]; then
-    # Channel 2: every entry names its age-wrapped per-block key; the file must be present.
+    # Channel 2: every entry must NAME its age-wrapped per-block key. Naming is a manifest
+    # property; having the file is a holding property, so only the latter can be partial.
     kf="$(jq -r ".entries[$i].key // empty" "$manifest")"
     [ -n "$kf" ] || dp_die "drop entry $seq carries no key file (channel 2 requires one)"
-    [ -f "$inbox/$kf" ] || dp_die "missing key file $kf at seq $seq"
+  fi
+
+  # Needs the bytes. Absent is fatal unless the caller declared itself a partial holder.
+  if [ -f "$inbox/$block" ]; then
+    got="sha256:$(dp_sha256_file "$inbox/$block")"
+    [ "$got" = "$this" ] || dp_die "block $block tampered at seq $seq ($got != $this)"
+    if [ -n "$kf" ] && [ ! -f "$inbox/$kf" ] && [ "$partial" = "0" ]; then
+      dp_die "missing key file $kf at seq $seq"
+    fi
+    held=$((held+1))
+  elif [ "$partial" = "1" ]; then
+    unheld="$unheld $seq"
+  else
+    dp_die "missing block file $block at seq $seq (pass --partial if you hold only some)"
   fi
 
   prev="$this"
   i=$((i+1))
 done
 
-dp_log "OK: chain verifies — $n block(s), source '$source'"
-echo "verified"
+# Report the smaller claim as the smaller claim. Never print the full sentinel for a partial run.
+if [ "$partial" = "1" ] && [ "$held" -lt "$n" ]; then
+  dp_log "OK: chain verifies — $n entries, source '$source' (signature + linkage, no bytes needed)"
+  dp_log "PARTIAL: $held/$n block(s) held and hash-verified; NOT held: seq$(dp_ranges "$unheld")"
+  echo "verified-partial $held/$n"
+else
+  dp_log "OK: chain verifies — $n block(s), source '$source'"
+  echo "verified"
+fi

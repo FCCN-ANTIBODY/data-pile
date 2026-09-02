@@ -316,3 +316,15 @@ bin/check-custody >/dev/null 2>&1 || fail "check-custody failed on the repo as-i
 mkdir -p "$work/badwf"; printf 'env:\n  X: ${{ secrets.SNEAKY }}\n' > "$work/badwf/x.yml"
 WORKFLOWS_DIR="$work/badwf" bin/check-custody >/dev/null 2>&1 && fail "checker passed an undeclared secret-read" || true
 ok "workflows read only declared secrets; an undeclared read fails the build"
+
+echo "[16] partial verification: the key-less reader who holds only SOME blocks"
+# Deliberately outside the age/ssh gates above — a disclosed excerpt is verified with no
+# identity and no secret, so its test must not need one either. Runs everywhere.
+test/partial.test.sh >/dev/null 2>&1 || { test/partial.test.sh; fail "partial verification suite failed"; }
+ok "bin/verify --partial: smaller claim, distinct sentinel, linkage held with zero bytes"
+if command -v node >/dev/null 2>&1; then
+  node test/partial-mirror.test.mjs >/dev/null 2>&1 || { node test/partial-mirror.test.mjs; fail "partial mirror failed"; }
+  ok "verifyFeed({partial}) agrees with bin/verify --partial on the same bytes"
+else
+  ok "partial mirror skipped (node absent)"
+fi

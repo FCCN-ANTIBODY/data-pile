@@ -73,7 +73,9 @@ workflow, the offline origin does.
 `bin/pile-new` (one-gesture provision: `--recipient` absent-owner / `--keygen` owns-it; `.mjs`
 port fills on-device), `bin/pile-poll` (reserve a poll's SHOWN anchor on the tank — `polls/<poll>.json`,
 `qr:null` until signing, `governed_by` the Tell; **`.mjs` leads**, bash mirrors byte-for-byte — see
-`CONTRACT.md` "The poll anchor"), `bin/ingest` + `bin/verify` (pull + verify a signed feed), `bin/prove` (commit-and-reveal — a
+`CONTRACT.md` "The poll anchor"), `bin/ingest` + `bin/verify` (pull + verify a signed feed; `--partial` verifies the smaller claim
+for a reader holding only some blocks, and reports a distinct sentinel so it can never pass as a
+full verification), `bin/prove` (commit-and-reveal — a
 key-less party verifies against the signed manifest; this *is* the public-husk backing),
 `bin/report` (documented stub — aggregation is deliberately undecided, owner's to define),
 `keys/custody.yml` + `bin/check-custody`.
