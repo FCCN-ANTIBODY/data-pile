@@ -1,0 +1,47 @@
+The ledger's negative claim: "this has never been revealed"
+
+Your point, built: the valuable statement is not *"these blocks were disclosed"* — the keys are already public and say so themselves — but **"this block has never been disclosed."** That is the claim a subject actually cares about, and until now nothing could make it, because absence from a flat list is only as good as the list being whole.
+
+## Three changes, all small
+
+**The events are hash-chained**, the way the manifest's blocks are. One idiom for "this list has not been edited behind you."
+
+```
+{"seqs":"2-3","reason":"quoted in the Precision Security piece","prev":"null","this":"ec234870"}
+{"seqs":"5","reason":"follow-up citation","prev":"ec234870","this":"64075917"}
+```
+
+Drop a row you regret and it says so:
+
+```
+ledger chain BROKEN — event 0: prev=ec234870… expected null;
+an event was edited or removed after the fact
+```
+
+Editing one in place is caught the same way — I test widening a past event's range, not just deleting it.
+
+**A reveal must name what it is for.** `--reason` on a disclosure, mirroring the one `--withhold` already required, and for the reason you gave: you should not be disclosing anything you do not intend to cite, so naming it costs nothing when the act is deliberate and is the whole friction when it is not. Nothing judges it. `bin/prove` passes one through automatically, overridable with `DP_REASON`.
+
+**`--never SPEC` states the claim, with its evidence:**
+
+```
+never-disclosed seq 0-1,6-7
+  against ledger head 64075917772f6082…
+  over 2 event(s)
+  manifest 88dc8a7e60abfc56…
+  verify the chain with: bin/revealed --check
+```
+
+It cites what it rests on rather than just answering "yes" — a bare yes would be the tool asserting the thing it is supposed to be evidencing.
+
+## What this does and does not buy
+
+It does **not** make the ledger unforgeable. An owner can rewrite the whole thing and re-chain it. What it does is make it **incoherent to edit selectively**, which is the realistic failure: not a determined forger, but an operator quietly dropping a row.
+
+And your intuition about echoes is structurally right. A published key is out. Every reader who has ingested holds the chain to their point. A disclosure bundle exists wherever it was published. A ledger that disagrees with those is a story that fails to line up — and the messier the history, the harder it is to make one that does.
+
+## Still not the strong form
+
+This is the rule-shaped half. The absence-shaped half — **never wrapping a key at all**, so a block is unopenable by everyone including the owner — is specified in E2 and unbuilt. Rotation remains the collision: "close one source, open another" would re-key a withheld region as ordinary maintenance.
+
+Suite green, 20 steps. Three new test steps cover the negative claim, the required reason, and both tamper shapes.
