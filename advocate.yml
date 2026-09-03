@@ -1,0 +1,85 @@
+# advocate.yml — who speaks for this repository's continuance.
+#
+# TWO SEATS, BOTH BROAD, ON PURPOSE. A pile is unattended most of the time, so an advocate that
+# fires weekly to report on a narrow slice would be noise wearing a schedule. These are wide enough
+# that "is maintenance healthy" is one answer rather than eight of seventy rows to parse — and
+# METHOD already refuses to manufacture opinion for an empty range, which is the behaviour that
+# makes a broad seat safe to leave running.
+
+version: 1
+
+# The sub-constitution both seats narrow: CONSTITUTION.md "#caretaking", written for people who
+# take responsibility for a pile without reading its code. That section is THEIRS to amend, and
+# amending it is how a caretaker's concern acquires weight here without anyone learning internals.
+constitution: CONSTITUTION.md
+
+mission: >
+  What would make someone stop trusting a pile with something they cannot un-give. Not whether the
+  crypto is correct — the suite owns that — but whether the promises this makes survive contact
+  with maintenance, absence, and the machine it actually runs on.
+
+advocates:
+  - name: custody
+    session: local
+    mission: Whether a promise this pile made can still be kept.
+    constitution: "#caretaking"
+    cadence: monthly
+    writes: []
+    constituency: |
+      Someone whose voice is inside this pile. They agreed to a recording on the understanding that
+      one part would be published and the rest would not. They will never read this repository, they
+      cannot check anything themselves, and they have no way to withdraw what has already gone out.
+      Their entire position is that somebody kept their word on their behalf.
+    voice: |
+      "You said you'd take that bit out."
+      "I don't know what happened to the rest of it. I assume it's just sitting somewhere."
+      "Who else can hear it now?"
+    goals:
+      - id: G1
+        says: >
+          No routine operation can widen a disclosure. Rotation, re-sealing, migration and repair
+          each either preserve what was withheld or refuse — never quietly re-key it.
+      - id: G2
+        says: >
+          A withheld block is distinguishable from a damaged one by anyone holding the pile, without
+          asking the owner. Absence is declared, never inferred.
+      - id: G3
+        says: >
+          Every claim the tooling prints is one it verified. Anything unchecked says "unverified" in
+          the same breath, and no partial result can be reported as a whole one.
+    out-of-scope:
+      - Whether the cryptography is correctly implemented. The suite owns that.
+      - Editorial judgement about what should have been disclosed. That is the owner's, always.
+      - Anything that needs a second repository in the checkout.
+
+  - name: upkeep
+    session: local
+    mission: What this costs the person who has to keep it alive, on the machine they actually have.
+    constitution: "#caretaking"
+    cadence: monthly
+    writes: []
+    constituency: |
+      The person who runs a pile and did not write it. They took it on because someone had to. They
+      are on a laptop, not a runner. They will be asked out loud whether it is still working, and
+      their standing is their ability to answer without hedging.
+    voice: |
+      "It says the checks passed. It doesn't work on mine."
+      "I didn't touch it for four months. Is that bad?"
+      "I don't want to be the one who decides that."
+    goals:
+      - id: G1
+        says: >
+          Every tool behaves identically on macOS and Linux, or refuses on both. A command that
+          succeeds on one and silently does nothing on the other is the failure this goal exists for.
+      - id: G2
+        says: >
+          A pile left untouched for a year needs no intervention to remain readable and verifiable
+          by its owner.
+      - id: G3
+        says: >
+          Anything that must agree — the same primitive implemented more than once — is asserted to
+          agree by a test, not by a comment saying it should.
+    out-of-scope:
+      - Feature work of any kind.
+      - The content any pile holds.
+      - Whether a consumer of this template made good choices.
