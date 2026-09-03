@@ -145,7 +145,8 @@ if [ -n "$seqspec" ]; then
   dp_log "wrote $bundle"
   dp_log "DISCLOSES $(printf '%s' "$seqs" | grep -c .) of $total block(s): seq$(dp_ranges "$held") — every other block stays sealed"
   # Record it WITHOUT the keys, so the pile still knows what went out if the bundle is pruned.
-  "$here/revealed" --dir "$dir" --source "$source" --record "$(dp_ranges "$held")" --bundle "$bundle" 2>/dev/null || true
+  "$here/revealed" --dir "$dir" --source "$source" --record "$(dp_ranges "$held")" \
+    --reason "${DP_REASON:-disclosed via bin/prove --seqs $seqspec}" --bundle "$bundle" 2>/dev/null || true
   echo "$bundle"
   exit 0
 fi

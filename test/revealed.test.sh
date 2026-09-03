@@ -87,4 +87,36 @@ out="$(says bin/revealed --dir "$work")"
 case "$out" in *"seq 0,7,9-10"*) ;; *) fail "sealed set wrong with multi-digit members: $out";; esac
 ok "1 and 11 are distinct; the sealed set spans single and double digits"
 
+echo "[11] the NEGATIVE claim — the one a subject actually cares about"
+# "These were disclosed" is weak: the keys are public and say so themselves. "This has NEVER been
+# disclosed" is the claim worth making, and it is only as good as the ledger being whole.
+out="$(says bin/revealed --dir "$work" --never 0)"
+case "$out" in *"never-disclosed seq 0"*) ;; *) fail "seq 0 was never disclosed: $out";; esac
+case "$out" in *"against ledger head"*) ;; *) fail "the claim must state what it rests on";; esac
+refuses bin/revealed --dir "$work" --never 2 || fail "seq 2 HAS been disclosed"
+case "$(says bin/revealed --dir "$work" --never 2)" in
+  *"NOT never-disclosed"*) ;; *) fail "wrong refusal";; esac
+ok "asserts never-disclosed, cites the head it rests on, refuses when false"
+
+echo "[12] a reveal must say what it is for"
+refuses bin/revealed --dir "$work" --record 7 || fail "accepted a reveal with no reason"
+case "$(says bin/revealed --dir "$work" --record 7)" in
+  *reason*) ;; *) fail "refusal did not ask for a reason";; esac
+[ -n "$(jq -r '.events[0].reason // empty' "$L")" ] || fail "prove did not record a reason"
+ok "a disclosure you cannot explain is one you did not need"
+
+echo "[13] the events are chained — a dropped row is visible"
+bin/revealed --dir "$work" --check >/dev/null 2>&1 || fail "a well-formed chain should verify"
+cp "$L" "$work/ledger.bak"
+jq 'del(.events[0])' "$L" > "$work/t" && mv "$work/t" "$L"
+refuses bin/revealed --dir "$work" --check || fail "dropping an event went unnoticed"
+case "$(says bin/revealed --dir "$work" --check)" in
+  *"chain BROKEN"*) ;; *) fail "wrong complaint";; esac
+# Editing in place, rather than deleting, must also show.
+cp "$work/ledger.bak" "$L"
+jq '.events[0].seqs = "2-6"' "$L" > "$work/t" && mv "$work/t" "$L"
+refuses bin/revealed --dir "$work" --check || fail "widening a past event went unnoticed"
+cp "$work/ledger.bak" "$L"
+ok "removing or editing a past disclosure breaks the chain visibly"
+
 echo "PASS: the disclosure ledger"

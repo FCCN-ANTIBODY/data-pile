@@ -3,7 +3,9 @@
 #
 #   bin/revealed [--dir DIR] [--source NAME]            show the ledger
 #   bin/revealed --withhold SPEC --reason TEXT          mark blocks that must never be disclosed
-#   bin/revealed --record SPEC --bundle PATH            append a disclosure (bin/prove calls this)
+#   bin/revealed --record SPEC --reason TEXT [--bundle PATH]   append a disclosure (bin/prove calls this)
+#   bin/revealed --never SPEC                           ASSERT these have never been disclosed
+#   bin/revealed --check                                verify the ledger's own chain
 #
 # WHY A LEDGER SEPARATE FROM THE BUNDLES. A proof bundle already records what was revealed — but
 # it records it *by carrying the keys*, so it is the disclosure itself rather than an account of
@@ -16,6 +18,19 @@
 # ledger cannot undo that — nothing can. It can make it hard to do by accident: name what is newly
 # going out, and refuse outright where a block was deliberately withheld.
 #
+# THE NEGATIVE CLAIM IS THE VALUABLE ONE. "These blocks have been disclosed" is weak — the keys
+# are already public and say so themselves. "This block has NEVER been disclosed" is the claim a
+# subject actually cares about, and until now nothing could state it: absence from a flat list is
+# only as good as the list being complete.
+#
+# So the events are HASH-CHAINED, the way the manifest's blocks are. Dropping an event to tidy up
+# a messy history breaks the chain at that point, visibly, for anyone holding a copy. That does not
+# make the ledger unforgeable — an owner can rewrite everything and re-sign. It makes it
+# INCOHERENT to do so selectively, which is the realistic threat: not a determined forger, but an
+# operator quietly dropping a row they regret. And the echoes are real — a published key is out,
+# every reader who ingested holds the chain to their point, and a disclosure bundle exists
+# wherever it was published. A ledger that disagrees with those is the story failing to line up.
+#
 # WHAT IT CANNOT DO. Nothing here helps a payload that was disclosed whole; there is no redaction
 # to protect. It also does not weaken the stronger guarantee: a block whose key was never wrapped
 # is unopenable by everyone including the owner, which is an absence rather than a rule and needs
@@ -25,7 +40,7 @@ set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 . "$here/lib.sh"
 
-dir="."; source="drop"; withhold=""; reason=""; record=""; bundle=""
+dir="."; source="drop"; withhold=""; reason=""; record=""; bundle=""; never=""; check=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --dir) dir="$2"; shift 2;;
@@ -34,6 +49,8 @@ while [ $# -gt 0 ]; do
     --reason) reason="$2"; shift 2;;
     --record) record="$2"; shift 2;;
     --bundle) bundle="$2"; shift 2;;
+    --never) never="$2"; shift 2;;
+    --check) check=1; shift;;
     *) dp_die "revealed: unknown arg: $1";;
   esac
 done
@@ -56,6 +73,49 @@ ledger="$dir/reports/revealed.json"
 ever()      { jq -r '.events[].seqs'   "$ledger" | while read -r r; do dp_expand_seqs "$r"; done | sort -n -u; }
 forbidden() { jq -r '.withheld[].seqs' "$ledger" | while read -r r; do dp_expand_seqs "$r"; done | sort -n -u; }
 
+# An event's own hash, over the fields that matter and the link to what came before. Same shape as
+# the manifest chain, deliberately: one idiom for "this list has not been edited behind you".
+event_hash() { # PREV SEQS AT REASON
+  dp_sha256_str "event:$1|$2|$3|$4"
+}
+
+if [ "$check" = "1" ]; then
+  n=0; prev="null"; bad=""
+  while read -r e; do
+    [ -z "$e" ] && continue
+    p="$(jq -r '.prev // "null"' <<<"$e")"; t="$(jq -r '.this // ""' <<<"$e")"
+    sq="$(jq -r '.seqs' <<<"$e")"; at="$(jq -r '.at' <<<"$e")"; wy="$(jq -r '.reason // ""' <<<"$e")"
+    [ "$p" = "$prev" ] || bad="$bad event $n: prev=$p expected $prev;"
+    want="$(event_hash "$p" "$sq" "$at" "$wy")"
+    [ "$t" = "$want" ] || bad="$bad event $n: hash mismatch;"
+    prev="$t"; n=$((n+1))
+  done < <(jq -c '.events[]' "$ledger")
+  if [ -n "$bad" ]; then
+    # Loud, because a broken chain here is not a corrupt file — it is a disclosure history that
+    # has been edited, which is the one thing this record exists to make hard.
+    dp_die "ledger chain BROKEN —$bad an event was edited or removed after the fact"
+  fi
+  dp_log "OK: $n event(s), chain intact, head $prev"
+  echo "intact"
+  exit 0
+fi
+
+if [ -n "$never" ]; then
+  want="$(dp_expand_seqs "$never")"
+  hit="$(dp_set_and "$want" "$(ever)")"
+  if [ -n "${hit// /}" ]; then
+    dp_die "NOT never-disclosed: seq$(dp_ranges "$hit") appears in this ledger"
+  fi
+  # State what the claim rests on, so a reader can check it rather than take it. A bare "yes"
+  # would be the tool asserting what it is supposed to be evidencing.
+  head="$(jq -r '.events[-1].this // "null"' "$ledger")"
+  echo "never-disclosed seq$(dp_ranges "$(printf '%s ' $want)")"
+  echo "  against ledger head $head over $(jq '.events | length' "$ledger") event(s)"
+  echo "  manifest $(jq -r '.manifest_digest' "$ledger")"
+  echo "  verify the chain with: bin/revealed --check"
+  exit 0
+fi
+
 if [ -n "$withhold" ]; then
   [ -n "$reason" ] || dp_die "revealed: --withhold needs a --reason (an unexplained redaction is indistinguishable from a mistake)"
   seqs="$(dp_expand_seqs "$withhold")"
@@ -70,8 +130,16 @@ if [ -n "$withhold" ]; then
 fi
 
 if [ -n "$record" ]; then
-  jq --arg r "$(trim "$record")" --arg b "${bundle:-}" --arg at "$(date -u +%FT%TZ)" \
-     '.events += [{seqs:$r, bundle:$b, at:$at}]' "$ledger" > "$ledger.tmp" && mv "$ledger.tmp" "$ledger"
+  # A reveal carries a reason for the same purpose a withhold does, from the other side: you should
+  # not be disclosing anything you do not intend to cite, so naming what it is for costs nothing
+  # when the act is deliberate and is the whole friction when it is not. It is not judged here.
+  [ -n "$reason" ] || dp_die "revealed: --record needs a --reason (name what this disclosure is for; a reveal you cannot explain is one you did not need)"
+  at="$(date -u +%FT%TZ)"; sq="$(trim "$record")"
+  prev="$(jq -r '.events[-1].this // "null"' "$ledger")"
+  jq --arg r "$sq" --arg b "${bundle:-}" --arg at "$at" --arg why "$reason" \
+     --arg p "$prev" --arg t "$(event_hash "$prev" "$sq" "$at" "$reason")" \
+     '.events += [{seqs:$r, reason:$why, bundle:$b, at:$at, prev:$p, this:$t}]' \
+     "$ledger" > "$ledger.tmp" && mv "$ledger.tmp" "$ledger"
   exit 0
 fi
 
