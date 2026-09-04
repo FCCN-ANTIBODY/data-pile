@@ -1,9 +1,16 @@
-# Lifecycle: from live mailbox to a sealed bottle, and the pile's backing role
+# Lifecycle: from live mailbox to a sealed bundle, and the pile's backing role
 
 This note describes the **whole life of a data-pile** — how it starts as a live thing on a Tell, how
-it becomes addressable, how a finished poll seals off as "a little bottle of data," and what the pile
+it becomes addressable, how a finished poll seals off into a self-verifying bundle, and what the pile
 *is* in the reporting model: the **verifiable backing** behind a Tell's anonymous report, never the
 reporter itself. It is **doc-only**; it names how the existing pieces compose.
+
+> **On the word "bottle."** An earlier draft of this note called a sealed pile "a little bottle of
+> data." That was a working phrase from the conversation that named these states, and it has since
+> collided with a real, different thing: a **bottle** in the constellation is a signed, isolated
+> origin (`<label>.<storage>.anecdote.channel`) or its inert distributed capsule — a container that
+> can hold a pile, not a name for one. The sealed state here is a **bundle** ([`docs/transfer.md`](transfer.md)),
+> and that is the word to use. A bundle may well end up *inside* a bottle; that does not make it one.
 
 ## Chain of custody — the Tell signs, the pile holds
 
@@ -11,7 +18,7 @@ The pile signs nothing it receives. **The Tell signs every delivery manifest**
 ([`tell.anecdote.channel/bin/deliver`](https://github.com/FCCN-ANTIBODY/tell.anecdote.channel/blob/main/bin/deliver);
 [`CONTRACT.md`](../CONTRACT.md) Layer 2), and the pile pulls, verifies, and persists it. So a sealed
 pile **carries the Tell's signature as provenance** — neither party can later deny its role without
-breaking the signature. This is what makes a sealed pile a trustworthy bottle rather than a private
+breaking the signature. This is what makes a sealed pile a trustworthy artifact rather than a private
 assertion.
 
 ## The four states
@@ -22,11 +29,11 @@ assertion.
 - **Addressable.** When the fronting Tell lists on an Atlas, distant neighbors can answer without
   being on that Tell. **The pile's behavior does not change** — listing only widens *who can answer*.
   The QR entry to a poll can be handed out individually regardless of any registry.
-- **Sealed (a bottle).** When a poll/round closes (`lifecycle.closes_at` in the poll's constitution),
+- **Sealed (a bundle).** When a poll/round closes (`lifecycle.closes_at` in the poll's constitution),
   the pile's blocks for that poll are a self-verifying, **Tell-signed** artifact — the
-  [`docs/transfer.md`](transfer.md) bundle, scoped to the closed poll. The bottle travels and verifies
+  [`docs/transfer.md`](transfer.md) bundle, scoped to the closed poll. The bundle travels and verifies
   with no live origin; the signed manifest is its sole anchor.
-- **Disclosed (proven), at the owner's discretion.** The owner may keep the bottle sealed forever, or
+- **Disclosed (proven), at the owner's discretion.** The owner may keep the bundle sealed forever, or
   publish a ratchet checkpoint with `bin/prove` so anyone can decrypt from that point and confirm the
   raw against the Tell-signed manifest. Disclosure is forward-only and never surrenders the master
   identity ([`CONTRACT.md`](../CONTRACT.md) Layer 3).
