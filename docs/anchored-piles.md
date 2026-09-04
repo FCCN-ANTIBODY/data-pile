@@ -42,8 +42,10 @@ The constellation already treats a poll as an anecdote subtype:
 - `anecdote.poll/v1` — an anecdote whose content is a *question* plus
   *suggested* options (`anecdote.channel/viewer/poll.mjs`). Options are
   non-binding; a custom answer is always allowed.
-- This pile is already "a bottle of possibly-mixed items" with a *list* of
-  `sources` (`CONTRACT.md`, `pile.yml`; civic-node `docs/PIPELINE.md`).
+- This pile is already a *container of possibly-mixed items* with a *list* of
+  `sources` (`CONTRACT.md`, `pile.yml`; civic-node `docs/PIPELINE.md`). (Said
+  loosely as "a bottle" in an earlier draft; see `docs/lifecycle.md` on why that
+  word is reserved for the signed origin/capsule and not used for a pile.)
 
 And the constellation has already named the hinge: **a prefab answer is the
 solicitation signal** (`antidote/docs/faces.md`, `tell/docs/solicitation.md`) —
@@ -181,7 +183,7 @@ and no options → citation-graph projection.
 
 - **Domain-agnostic face.** A pile's addressable face is a **Floor** — Tell
   serves an identical offline PWA on every `<name>.tell.anecdote.channel`
-  (`tell/floor/`, `tell/docs/floor.md`). A "journal-themed bottle" is *the same
+  (`tell/floor/`, `tell/docs/floor.md`). A "journal-themed pile" is *the same
   Floor with a citation-required skin*, not a new `*.journal.anecdote.channel`
   routing case (that subdomain does not exist; journal is the path `/journal/`).
   The mechanism is domain-agnostic; the domain/skin is presentation of intent.
