@@ -1,0 +1,191 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claim this data-pile</title>
+<!--
+  claim.html — CRACK THE GLOWSTICK. The walk-up that gives an unowned pile an owner.
+
+  A forked data-pile ships UNCLAIMED: pile.yml carries `age_recipient: ""` and keys/ is empty, so
+  bin/drop-pack refuses ("no recipient") and nothing can be sealed into it. That is not a policy
+  gate, it is an absence — there is no key to encrypt to. The pile is inert until a person stands
+  on it, and this page is where they stand.
+
+  WHY A PAGE AND NOT A COMMAND. The identity must be minted where the operator is, and the operator
+  is usually holding a phone. A terminal one-liner that prints AGE-SECRET-KEY-1… assumes a
+  clipboard, a shell, and a desktop; on mobile it produces a string nobody can get a handle on. So
+  the ceremony lives at the pile's OWN origin: the passkey is scoped to this domain (which is what
+  makes it an identifying domain rather than a generic key), the identity is minted here and stays
+  here, and the only thing that leaves is the public recipient — carried out as a PRE-FILLED LINK,
+  so no one has to select and copy a key on a touchscreen.
+
+  WHAT CROSSES, AND WHAT NEVER DOES:
+    stays on this device forever   AGE-SECRET-KEY-1…  (the identity; opens the pile)
+    leaves, publicly               age1…              (the recipient; seals TO the pile)
+  This is the custody line the whole project turns on — sign is not decrypt, and a provisioner
+  never touches an identity (data-pile invariant #4, keys/custody.yml, bin/check-custody).
+
+  NOTHING PHONES HOME. No fetch to any third party, no analytics, no form post. The only network
+  call is reading this pile's own pile.yml to show you what you are claiming.
+-->
+<style>
+  :root { --ink:#1b1a18; --bg:#fbf9f4; --rule:#d8d4cc; --warn:#a33; --ok:#2a6; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:1.25rem; max-width:34rem; font:16px/1.55 ui-serif,Georgia,serif;
+         color:var(--ink); background:var(--bg); }
+  h1 { font-size:1.4rem; margin:0 0 .2rem; }
+  .sub { color:#6b665e; margin:0 0 1.4rem; font-size:.92rem; }
+  .card { border:1px solid var(--rule); border-radius:6px; padding:1rem; margin:0 0 1rem; }
+  .state { font-weight:600; }
+  .state.unclaimed { color:var(--warn); }
+  .state.claimed { color:var(--ok); }
+  button { font:inherit; padding:.7rem 1rem; width:100%; border:1px solid var(--ink);
+           background:var(--ink); color:var(--bg); border-radius:5px; cursor:pointer; }
+  button[disabled] { opacity:.45; cursor:not-allowed; }
+  button.secondary { background:transparent; color:var(--ink); }
+  code, .key { font:13px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; word-break:break-all; }
+  .key { display:block; padding:.6rem; background:#fff; border:1px solid var(--rule);
+         border-radius:4px; margin:.4rem 0; }
+  .danger { border-color:var(--warn); }
+  .danger h2 { color:var(--warn); }
+  h2 { font-size:1rem; margin:0 0 .5rem; }
+  ol { padding-left:1.2rem; } li { margin:.4rem 0; }
+  a.cta { display:block; text-align:center; padding:.7rem 1rem; background:var(--ink);
+          color:var(--bg); text-decoration:none; border-radius:5px; margin:.6rem 0; }
+  .hidden { display:none; }
+  .muted { color:#6b665e; font-size:.88rem; }
+</style>
+
+<h1>Claim this data-pile</h1>
+<p class="sub" id="where"></p>
+
+<div class="card">
+  <p>Status: <span class="state" id="state">checking…</span></p>
+  <p class="muted" id="explain"></p>
+</div>
+
+<div id="step-claim" class="card hidden">
+  <h2>1 · Crack it</h2>
+  <p class="muted">Your device will ask you to confirm — a fingerprint, a face, or a PIN. That
+  gesture is the claim: it scopes a passkey to <code id="rpid"></code> and mints this pile's
+  identity here, on this device.</p>
+  <button id="go">Claim this pile on this device</button>
+  <p class="muted" id="err" style="color:var(--warn)"></p>
+</div>
+
+<div id="step-done" class="hidden">
+  <div class="card danger">
+    <h2>2 · Save this, now</h2>
+    <p>This is the only key that can ever open what this pile holds. It is stored on this device.
+    <strong>If you lose this device and have no copy, everything sealed into this pile is
+    unreadable forever.</strong> There is no recovery, by design — nobody else has it.</p>
+    <span class="key" id="identity"></span>
+    <button class="secondary" id="save">Download the identity file</button>
+  </div>
+  <div class="card">
+    <h2>3 · Hand over the public half</h2>
+    <p class="muted">Only this line leaves your device. It lets anyone seal <em>to</em> the pile
+    and lets nobody open it.</p>
+    <span class="key" id="recipient"></span>
+    <a class="cta" id="file" target="_blank" rel="noopener">Open the pre-filled claim →</a>
+    <p class="muted">That opens this pile's repository with the line already written. Submit it and
+    the pile has an owner.</p>
+  </div>
+</div>
+
+<script type="module">
+import { mintAgeIdentity } from "./bin/age-keygen.mjs";
+import { claimRequest } from "./bin/claim-request.mjs";
+
+const $ = (id) => document.getElementById(id);
+const enc = new TextEncoder();
+
+// The pile's own origin IS the identifying domain: a passkey minted here is scoped here and
+// cannot be silently reused for another pile.
+const rpId = location.hostname;
+$("rpid").textContent = rpId || "this site";
+$("where").textContent = location.origin + location.pathname.replace(/claim\.html$/, "");
+
+// Read this pile's own pile.yml — the only network call on this page.
+let repoSlug = "", claimed = "";
+try {
+  const yml = await (await fetch("./pile.yml", { cache: "no-store" })).text();
+  claimed = (yml.match(/^age_recipient:\s*"([^"]*)"/m) || [, ""])[1];
+  repoSlug = (yml.match(/^repo_url:\s*"https:\/\/github\.com\/([^"]+)"/m) || [, ""])[1];
+} catch { /* a pile served from somewhere without pile.yml still claims fine */ }
+
+// Fall back to the owner/repo a GitHub Pages URL already tells us.
+if (!repoSlug && /\.github\.io$/.test(rpId)) {
+  repoSlug = rpId.replace(/\.github\.io$/, "") + "/" + location.pathname.split("/").filter(Boolean)[0];
+}
+
+if (claimed) {
+  $("state").textContent = "already claimed";
+  $("state").className = "state claimed";
+  $("explain").innerHTML = "This pile has an owner. Its recipient is <code>" + claimed +
+    "</code>. Claiming again would orphan everything sealed under the old key, so this page stops here.";
+} else {
+  $("state").textContent = "unclaimed — inert";
+  $("state").className = "state unclaimed";
+  $("explain").textContent = "Nothing can be sealed into this pile yet. There is no key to encrypt " +
+    "to, so the tools refuse rather than pretend. Claiming it mints that key on your device.";
+  $("step-claim").classList.remove("hidden");
+}
+
+$("go").addEventListener("click", async () => {
+  $("go").disabled = true; $("err").textContent = "";
+  try {
+    if (!window.isSecureContext) throw new Error("This page must be served over https to mint a key.");
+    if (!navigator.credentials || !window.PublicKeyCredential) {
+      throw new Error("This browser has no passkey support, so the gesture cannot be required.");
+    }
+
+    // 1. Mint first, so the passkey's challenge can COMMIT to the recipient: the gesture then
+    //    attests this exact key rather than a bare "someone pressed a button".
+    const { identity, recipient } = await mintAgeIdentity();
+    const challenge = new Uint8Array(await crypto.subtle.digest("SHA-256", enc.encode(recipient)));
+
+    // 2. The gesture. A platform authenticator, scoped to this domain. The page cannot paint it
+    //    and a script cannot synthesise it — that is the whole point of requiring it.
+    await navigator.credentials.create({
+      publicKey: {
+        challenge, rp: { id: rpId, name: "data-pile" },
+        user: { id: challenge.slice(0, 16), name: repoSlug || rpId, displayName: "pile owner" },
+        pubKeyCredParams: [{ type: "public-key", alg: -7 }, { type: "public-key", alg: -257 }],
+        authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required",
+                                  residentKey: "preferred" },
+        timeout: 120000,
+      },
+    });
+
+    // 3. Keep the identity here. It is a string, so it cannot be a non-extractable WebCrypto key —
+    //    which is exactly why step 2 of the UI tells the truth about backups instead of implying
+    //    the device is a vault.
+    try { localStorage.setItem("data-pile:identity:" + (repoSlug || rpId), identity); } catch {}
+
+    $("identity").textContent = identity;
+    $("recipient").textContent = recipient;
+
+    $("save").addEventListener("click", () => {
+      const blob = new Blob([identity + "\n"], { type: "text/plain" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = (repoSlug || "data-pile").replace("/", "-") + ".age-identity.txt";
+      a.click();
+    });
+
+    // 4. The return path. A pre-filled issue, because a phone cannot reasonably select and copy
+    //    a key, and because the recipient is public — there is nothing here to protect in transit.
+    //    claimRequest is not given the identity at all, so this step cannot leak it.
+    const req = claimRequest({ recipient, repoSlug, origin: location.origin, rpId });
+    $("file").href = req.url;
+    if (!repoSlug) $("file").textContent = "Open the claim text (repo unknown — set repo_url in pile.yml)";
+
+    $("step-claim").classList.add("hidden");
+    $("step-done").classList.remove("hidden");
+  } catch (e) {
+    // Minting is cheap and idempotent; a refused or cancelled gesture must leave NO claim behind.
+    $("err").textContent = (e && e.message) || "The claim did not complete. Nothing was changed.";
+    $("go").disabled = false;
+  }
+});
+</script>
